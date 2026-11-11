@@ -1,0 +1,1372 @@
+<title>シャトルノック練習</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: full-bleed 3D court, rally counter top-center, stats HUD top-left, control sheet right (bottom sheet on phones) */
+:root{
+  --bg:#0d1714;
+  --panel:rgba(14,27,23,.9);
+  --line:rgba(220,236,226,.14);
+  --fg:#e6eee8;
+  --muted:#97ac9f;
+  --accent:#e2a23b;
+  --accent-ink:#1d1307;
+  --just:#7cdca2;
+  --early:#7cb9f4;
+  --late:#f2896d;
+  --miss:#8b9690;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);overflow:hidden;-webkit-tap-highlight-color:transparent}
+#app{position:relative;height:100%;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+.hud{position:absolute;top:12px;left:max(12px,env(safe-area-inset-left,0px));width:min(290px,calc(100% - 24px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:10px;backdrop-filter:blur(6px);pointer-events:none}
+.hud-shot{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hud-shot b{font-size:1.05rem}
+.hud-shot span{font-size:.75rem;color:var(--muted)}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.nums div{display:grid;gap:1px}
+.nums b{font-family:var(--display);font-weight:700;font-size:1.6rem;line-height:1;font-variant-numeric:tabular-nums}
+.nums small{font-size:.66rem;color:var(--muted);letter-spacing:.04em}
+.strip{display:grid;gap:3px}
+.track{position:relative;height:18px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.track .zone{position:absolute;top:2px;bottom:2px;left:40%;width:20%;border-radius:6px;background:color-mix(in srgb,var(--just) 22%,transparent)}
+.track .dot{position:absolute;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;opacity:.55}
+.track .dot.last{width:12px;height:12px;margin:-6px 0 0 -6px;opacity:1;box-shadow:0 0 0 2px var(--bg)}
+.strip-lab{display:flex;justify-content:space-between;font-size:.66rem;color:var(--muted)}
+
+/* ラリーカウンター */
+.combo{position:absolute;left:50%;top:10px;transform:translateX(-50%);text-align:center;pointer-events:none;display:grid;justify-items:center;gap:4px;--tier:#e6eee8;--glow:0px}
+.combo .lab{font-family:var(--display);font-weight:500;letter-spacing:.32em;font-size:.95rem;color:var(--muted);padding-left:.32em}
+.combo .num{font-family:var(--display);font-weight:700;font-size:clamp(4.2rem,13vw,8rem);line-height:.86;font-variant-numeric:tabular-nums;color:var(--tier);text-shadow:0 0 var(--glow) var(--tier),0 4px 18px rgba(0,0,0,.65);will-change:transform}
+.combo.pop .num{animation:pop .34s cubic-bezier(.2,1.7,.4,1)}
+.combo.big .num{animation:popBig .5s cubic-bezier(.2,1.7,.4,1)}
+.combo.break .num{animation:shatter .65s ease-in forwards}
+.combo .pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.pill{font-size:.72rem;padding:2px 9px;border-radius:99px;background:rgba(0,0,0,.5);border:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill.hot{border-color:var(--just);color:var(--just)}
+@keyframes pop{0%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes popBig{0%{transform:scale(2) rotate(-6deg)}60%{transform:scale(.92) rotate(2deg)}100%{transform:scale(1)}}
+@keyframes shatter{0%{transform:scale(1);opacity:1;filter:none}30%{transform:scale(1.18) rotate(-5deg);opacity:1}100%{transform:scale(.55) translateY(40px) rotate(14deg);opacity:0;filter:blur(5px)}}
+.banner{position:absolute;left:50%;top:27%;transform:translate(-50%,-50%);opacity:0;font-family:var(--display);font-weight:700;font-size:clamp(2.3rem,9vw,4.6rem);letter-spacing:.05em;pointer-events:none;white-space:nowrap;color:var(--bc,var(--accent));text-shadow:0 0 26px var(--bc,var(--accent)),0 3px 14px rgba(0,0,0,.6)}
+.banner.show{animation:banner 1.4s ease-out forwards}
+@keyframes banner{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}24%{transform:translate(-50%,-50%) scale(1)}78%{opacity:1;transform:translate(-50%,-55%) scale(1)}100%{opacity:0;transform:translate(-50%,-85%) scale(1)}}
+.flash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--fc,#fff) 40%,transparent),transparent 60%)}
+.flash.show{animation:flash .45s ease-out}
+@keyframes flash{0%{opacity:1}100%{opacity:0}}
+
+
+.judge{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s}
+.judge.show{opacity:1;transform:translate(-50%,-58%)}
+.judge b{display:block;font-family:var(--display);font-weight:700;font-size:clamp(1.8rem,6vw,3rem);letter-spacing:.04em;line-height:1;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.judge span{display:inline-block;margin-top:5px;font-size:.82rem;padding:2px 10px;border-radius:99px;background:rgba(0,0,0,.45)}
+
+.panel{position:absolute;top:12px;right:max(12px,env(safe-area-inset-right,0px));width:300px;max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(6px);display:flex;flex-direction:column}
+.panel-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+.panel-head h1{margin:0;font-size:1rem;font-weight:700;letter-spacing:.02em}
+.panel-head h1 small{display:block;font-size:.68rem;font-weight:400;color:var(--muted);margin-top:2px}
+.head-btns{display:flex;gap:6px;flex-shrink:0}
+.sheet-toggle,.mini-stop{appearance:none;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:8px;padding:5px 10px;font:inherit;font-size:.78rem;cursor:pointer;white-space:nowrap}
+.mini-stop{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+/* ラリー中は設定をたたんで小さく表示 */
+#app.collapsed .panel{width:auto;max-width:calc(100% - 24px)}
+#app.collapsed .panel-body{display:none}
+#app.collapsed .panel-head{border-bottom:0;padding:8px 10px;gap:10px}
+#app.collapsed .panel-head h1{font-size:.82rem}
+#app.collapsed .panel-head h1 small{display:none}
+#app.collapsed .hit{right:max(20px,env(safe-area-inset-right,0px))}
+.panel-body{display:grid;gap:16px;padding:14px}
+.group{display:grid;gap:8px}
+.label{font-size:.7rem;color:var(--muted);letter-spacing:.08em}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chip{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--fg);border-radius:9px;padding:8px 10px;text-align:left;font:inherit;cursor:pointer;display:grid;gap:1px}
+.chip b{font-size:.88rem}
+.chip span{font-size:.68rem;color:var(--muted)}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{appearance:none;border:0;background:transparent;color:var(--fg);font:inherit;font-size:.82rem;padding:7px 4px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.seg.mode button{padding:8px 4px;font-size:.84rem;line-height:1.25}
+.range{display:grid;gap:4px}
+.range-top{display:flex;justify-content:space-between;font-size:.82rem}
+.range-top output{font-family:var(--display);font-size:1rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.toggle{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;gap:8px;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.actions{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.actions.solo{grid-template-columns:1fr}
+.btn{appearance:none;border:1px solid var(--line);border-radius:10px;padding:11px 10px;font:inherit;font-weight:700;cursor:pointer;background:rgba(255,255,255,.05);color:var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ar{width:100%;border-color:var(--accent);color:var(--accent);background:transparent}
+.note{font-size:.72rem;color:var(--muted);line-height:1.6;margin:0}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.hit{position:absolute;right:calc(324px + env(safe-area-inset-right,0px));bottom:20px;width:96px;height:96px;border-radius:50%;border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 22%,rgba(0,0,0,.4));color:var(--fg);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;display:grid;place-content:center;gap:2px;backdrop-filter:blur(4px)}
+.hit small{font-size:.62rem;color:var(--muted);font-weight:400}
+.hit:active{transform:scale(.95)}
+.fallback{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:24px;color:var(--muted);background:var(--bg)}
+
+@media (max-width:900px){
+  .combo{left:auto;right:max(14px,env(safe-area-inset-right,0px));transform:none;justify-items:end}
+  .combo .num{font-size:clamp(3.4rem,15vw,5rem)}
+}
+@media (max-width:720px){
+  .hud{padding:9px 11px;gap:7px;width:calc(100% - 150px);min-width:190px}
+  .nums{grid-template-columns:repeat(2,1fr)}
+  .nums b{font-size:1.25rem}
+  .panel{top:auto;bottom:0;left:0;right:0;width:auto;max-height:50%;border-radius:16px 16px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .panel-head{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .panel-body{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .hit{right:max(16px,env(safe-area-inset-right,0px));bottom:calc(50% + 14px);width:84px;height:84px}
+  #app.collapsed .hit{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  .judge{top:40%}
+  .banner{top:30%}
+}
+@media (prefers-reduced-motion:reduce){
+  .judge{transition:none}
+  .combo.pop .num,.combo.big .num,.combo.break .num,.banner.show,.flash.show{animation-duration:1ms}
+}
+</style>
+
+<div id="app">
+  <canvas id="c" aria-label="バドミントンコートの3D表示"></canvas>
+
+  <div class="hud" aria-live="polite">
+    <div class="hud-shot"><b id="hudShot">ドライブラリー</b><span id="hudState">待機中</span></div>
+    <div class="nums">
+      <div><b id="n0">0</b><small id="l0">打球</small></div>
+      <div><b id="n1">–</b><small id="l1">ジャスト率</small></div>
+      <div><b id="n2">–</b><small id="l2">平均ずれ</small></div>
+      <div><b id="n3">0</b><small id="l3">最高ラリー</small></div>
+    </div>
+    <div class="strip">
+      <div class="track" id="track"><div class="zone"></div></div>
+      <div class="strip-lab"><span>← 早い</span><span>ジャスト ±0.05秒</span><span>遅い →</span></div>
+    </div>
+  </div>
+
+  <div class="combo" id="combo">
+    <div class="lab" id="comboLab">RALLY</div>
+    <div class="num" id="comboNum">0</div>
+    <div class="pills"><span class="pill" id="pBest">BEST 0</span><span class="pill" id="pSpeed">SPEED ×1.00</span><span class="pill hot" id="pJust" hidden>JUST ×2</span></div>
+  </div>
+  <div class="flash" id="flash"></div>
+  <div class="banner" id="banner"></div>
+  <div class="judge" id="judge"><b id="jMain"></b><span id="jSub"></span></div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <h1>シャトルノック練習<small>実際のスイングでラリーとノックを体験</small></h1>
+      <div class="head-btns">
+        <button class="mini-stop" id="miniStop" type="button" hidden>停止</button>
+        <button class="sheet-toggle" id="sheetToggle" type="button">たたむ</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="group">
+        <div class="label">練習モード</div>
+        <div class="seg mode" id="modeSeg">
+          <button type="button" data-m="rally" aria-pressed="true">ドライブ</button>
+          <button type="button" data-m="smash" aria-pressed="false">スマッシュ<br>レシーブ</button>
+          <button type="button" data-m="knock" aria-pressed="false">ノック</button>
+        </div>
+      </div>
+
+      <div class="group" data-for="rally smash">
+        <div class="label">打つ側</div>
+        <div class="seg" id="sideSeg">
+          <button type="button" data-v="dfh" aria-pressed="false">フォア</button>
+          <button type="button" data-v="dbh" aria-pressed="false">バック</button>
+          <button type="button" data-v="mix" aria-pressed="true">交互ランダム</button>
+        </div>
+        <div class="label" style="margin-top:4px">テンポ</div>
+        <div class="seg" id="tempoSeg">
+          <button type="button" data-v="0.88" aria-pressed="false">ゆっくり</button>
+          <button type="button" data-v="1" aria-pressed="true">ふつう</button>
+          <button type="button" data-v="1.12" aria-pressed="false">速い</button>
+        </div>
+        <label class="toggle" for="accel">続くほど速くなる<input id="accel" type="checkbox" checked></label>
+      </div>
+
+      <div class="group" data-for="knock" hidden>
+        <div class="label">球種</div>
+        <div class="chips" id="shotChips"></div>
+      </div>
+
+      <div class="group">
+        <div class="label">視点</div>
+        <div class="seg" id="viewSeg">
+          <button type="button" data-v="fp" aria-pressed="true">主観</button>
+          <button type="button" data-v="side" aria-pressed="false">横から</button>
+          <button type="button" data-v="top" aria-pressed="false">後方俯瞰</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="range"><div class="range-top"><label for="interval">ミス後・球出しの間隔</label><output id="oInterval">2.0秒</output></div><input id="interval" type="range" min="1" max="5" step="0.5" value="2"></div>
+        <div class="range"><div class="range-top"><label for="vary">コースのばらつき</label><output id="oVary">±15cm</output></div><input id="vary" type="range" min="0" max="100" step="5" value="15"></div>
+        <div class="label" style="margin-top:4px">再生速度</div>
+        <div class="seg" id="speedSeg">
+          <button type="button" data-s="0.25" aria-pressed="false">0.25×</button>
+          <button type="button" data-s="0.5" aria-pressed="false">0.5×</button>
+          <button type="button" data-s="1" aria-pressed="true">1×</button>
+        </div>
+      </div>
+      <div class="group">
+        <label class="toggle" for="guide">軌道と打点のガイド<input id="guide" type="checkbox" checked></label>
+        <label class="toggle" for="foot">打点まで自動で移動<input id="foot" type="checkbox" checked></label>
+      </div>
+      <div class="actions" id="actions">
+        <button class="btn primary" id="startBtn" type="button">ラリー開始</button>
+        <button class="btn" id="oneBtn" type="button" hidden>1球</button>
+      </div>
+      <button class="btn ar" id="arBtn" type="button" hidden>Questで体験(AR)</button>
+      <p class="note">打つ：Spaceキー、画面タップ、または「打つ」ボタン。押すと振り出し、ドライブは約0.09秒後にインパクトします。打点リングが緑に光った瞬間に振り出すとジャストです。相手は必ず返してくるので、ミスするまで続きます。スマッシュレシーブでは、良い当たりは奥へ高いロブになり、ずれると短く浮いて相手の次のスマッシュが近く・速くなります。</p>
+      <p class="note">Questのブラウザで HTTPS 公開したこのファイルを開くと「Questで体験」が表示され、パススルー越しに相手コートと相手が重なります。</p>
+    </div>
+  </aside>
+
+  <button class="hit" id="hitBtn" type="button">打つ<small>Space</small></button>
+  <div class="fallback" id="fallback" hidden>3D表示ライブラリを読み込めませんでした。ネットにつながったブラウザ(Safari・Chromeなど)で開き直してください。ファイルアプリのプレビューでは表示できません。</div>
+</div>
+
+<script>
+window.__boot = () => {
+const $ = s => document.querySelector(s);
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+
+/* ---------- 物理とコート寸法(m) ---------- */
+const G = 9.8, VT = 6.8, K = G / (VT * VT);        // a = g − k|v|v,  k = g / vt²
+const C = { L: 6.7, W: 3.05, WS: 2.59, SS: 1.98, LS: 5.94, NET: 1.55 };
+const HOME = { x: 0, z: 3.9 }, EYE = 1.55, HEAD = 0.51;
+const SMASH_H = 3.1, JUMP = 0.62;   // ジャンプスマッシュの打点の高さとジャンプの高さ(m)
+let WIND = 0.4;                       // 球出しの準備時間(スマッシュはジャンプの分だけ長い)
+const RB = { x: 0, z: 2.6 }, OB = { x: 0, z: -2.6 }, OPP_PLANE = -2.0;   // ドライブラリーの立ち位置
+const SB = { x: 0, z: 3.3 }, SO = { x: 0, z: -4.6 };                      // スマッシュレシーブの立ち位置
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rnd = () => Math.random() * 2 - 1;
+const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+const SHOTS = {
+  clear: { name: 'ハイクリア', sub: '奥へ高く・頭上で打つ', from: { x: 0, y: 2.6, z: -5.3 }, to: { x: 0, z: 5.9 }, angles: [50, 56, 44, 62, 38], hitH: 2.35 },
+  drop:  { name: 'ドロップ',   sub: 'ネット前に落ちる',     from: { x: 0, y: 2.5, z: -5.2 }, to: { x: 0.3, z: 1.8 }, angles: [10, 4, 16, 22, 28, 34], hitH: 0.8 },
+  smash: { name: 'スマッシュ', sub: '速い球をレシーブ',     from: { x: 0, y: 2.8, z: -4.6 }, to: { x: 0.7, z: 4.4 }, angles: [-8, -6, -10, -4, -12, -2, 0], hitH: 1.0 },
+  drive: { name: 'ドライブ',   sub: '低く速い平行球',       from: { x: 0, y: 1.35, z: -3.2 }, to: { x: -0.9, z: 6.1 }, angles: [6, 3, 9, 12, 15], hitH: 0.95 },
+  net:   { name: 'ヘアピン',   sub: 'ネット際の低い球',     from: { x: 0, y: 1.15, z: -0.8 }, to: { x: 0.3, z: 1.1 }, angles: [58, 66, 50, 72, 44], hitH: 0.6 }
+};
+
+function simulate(p, v, dt = 1 / 240, maxT = 5) {
+  let x = p.x, y = p.y, z = p.z, vx = v.x, vy = v.y, vz = v.z, t = 0;
+  const pts = [[x, y, z]];
+  while (t < maxT) {
+    const s = Math.hypot(vx, vy, vz);
+    vx += -K * s * vx * dt; vy += (-G - K * s * vy) * dt; vz += -K * s * vz * dt;
+    const nx = x + vx * dt, ny = y + vy * dt, nz = z + vz * dt;
+    if (ny <= 0) {
+      const f = y / (y - ny);
+      x += (nx - x) * f; z += (nz - z) * f; y = 0; pts.push([x, y, z]);
+      return { pts, dt, landT: t + dt * f, land: { x, z } };
+    }
+    x = nx; y = ny; z = nz; t += dt; pts.push([x, y, z]);
+  }
+  return { pts, dt, landT: t, land: { x, z } };
+}
+function clearsNet(r) {
+  const p = r.pts;
+  for (let i = 1; i < p.length; i++) if (Math.sign(p[i][2]) !== Math.sign(p[i - 1][2])) return p[i][1] > C.NET + 0.04;
+  return false;
+}
+// 打ち出し角を候補から選び、落下点に届く初速を二分法で求める
+function solve(from, to, angles) {
+  const dx = to.x - from.x, dz = to.z - from.z, D = Math.hypot(dx, dz), ux = dx / D, uz = dz / D;
+  let fallback = null;
+  for (const deg of angles) {
+    const a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const vel = s => ({ x: ux * s * ca, y: s * sa, z: uz * s * ca });
+    let lo = 0.5, hi = 120;
+    for (let i = 0; i < 32; i++) {
+      const mid = (lo + hi) / 2, r = simulate(from, vel(mid), 1 / 120);
+      const d = (r.land.x - from.x) * ux + (r.land.z - from.z) * uz;
+      if (d < D) lo = mid; else hi = mid;
+    }
+    const r = simulate(from, vel(hi));
+    const d = (r.land.x - from.x) * ux + (r.land.z - from.z) * uz;
+    if (!fallback) fallback = r;
+    if (Math.abs(d - D) < 0.4 && clearsNet(r)) return r;
+  }
+  return fallback;
+}
+function posAt(r, t) {
+  const f = Math.max(t, 0) / r.dt, i = Math.min(Math.floor(f), r.pts.length - 2), k = clamp(f - i, 0, 1);
+  const a = r.pts[i], b = r.pts[i + 1];
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+}
+// 軌道がある z の面を横切る時刻と位置
+function crossing(r, zPlane, dir) {
+  const p = r.pts;
+  for (let i = 1; i < p.length; i++) {
+    if ((dir > 0 && p[i][2] >= zPlane) || (dir < 0 && p[i][2] <= zPlane)) {
+      const k = (zPlane - p[i - 1][2]) / (p[i][2] - p[i - 1][2] || 1);
+      return { t: (i - 1 + k) * r.dt, pos: [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k, zPlane] };
+    }
+  }
+  return null;
+}
+
+/* ---------- 3Dシーン ---------- */
+const renderer = new THREE.WebGLRenderer({ canvas: $('#c'), antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.xr.enabled = true;
+const scene = new THREE.Scene();
+const BG = new THREE.Color(0x0d1714), FOG = new THREE.Fog(0x0d1714, 22, 50);
+scene.background = BG; scene.fog = FOG;
+const camera = new THREE.PerspectiveCamera(62, 1, 0.02, 120);
+scene.add(camera);
+const world = new THREE.Group(); scene.add(world);
+scene.add(new THREE.HemisphereLight(0xe4ecff, 0x2b2219, 0.95));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(4, 12, 6); scene.add(sun);
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.8, metalness: 0 }, o));
+
+const gym = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(0x3b2d22, { roughness: 0.9 }));
+gym.rotation.x = -Math.PI / 2; world.add(gym);
+function half(sign, color) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(C.W * 2 + 0.8, C.L + 0.8), mat(color));
+  m.rotation.x = -Math.PI / 2; m.position.set(0, 0.002, sign * (C.L + 0.8) / 2); world.add(m); return m;
+}
+const matOwn = half(1, 0x1d6a4c); half(-1, 0x1a6047);
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f5f0 });
+function seg(g, x1, z1, x2, z2) {
+  const w = 0.04, horiz = z1 === z2, len = horiz ? Math.abs(x2 - x1) : Math.abs(z2 - z1);
+  const m = new THREE.Mesh(horiz ? new THREE.PlaneGeometry(len + w, w) : new THREE.PlaneGeometry(w, len + w), lineMat);
+  m.rotation.x = -Math.PI / 2; m.position.set((x1 + x2) / 2, 0.006, (z1 + z2) / 2); g.add(m);
+}
+function courtLines(sign) {
+  const g = new THREE.Group(), L = C.L * sign, S = C.SS * sign, LS = C.LS * sign;
+  seg(g, -C.W, 0, -C.W, L); seg(g, C.W, 0, C.W, L); seg(g, -C.WS, 0, -C.WS, L); seg(g, C.WS, 0, C.WS, L);
+  seg(g, -C.W, L, C.W, L); seg(g, -C.W, LS, C.W, LS); seg(g, -C.W, S, C.W, S); seg(g, 0, S, 0, L);
+  world.add(g); return g;
+}
+const linesOwn = courtLines(1); courtLines(-1);
+
+function gridTex(color, n, alpha) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d'); x.strokeStyle = color; x.globalAlpha = alpha; x.lineWidth = 2;
+  for (let i = 0; i <= 64; i += 64 / n) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 64); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(64, i); x.stroke(); }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+const netTex = gridTex('#e6ece6', 4, 0.6); netTex.repeat.set(6.1 / 0.1, 0.76 / 0.1);
+const net = new THREE.Group();
+const netMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.1, 0.76), new THREE.MeshBasicMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+netMesh.position.y = C.NET - 0.38;
+const tape = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.05, 0.012), new THREE.MeshBasicMaterial({ color: 0xf4f4f0 })); tape.position.y = C.NET - 0.025;
+net.add(netMesh, tape);
+for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, C.NET, 8), mat(0x8c928e, { metalness: 0.5 })); p.position.set(s * C.W, C.NET / 2, 0); net.add(p); }
+world.add(net);
+
+/* ラケット:原点=グリップ位置、+Y方向にシャフトとヘッド、面の法線=+Z */
+const stringTex = gridTex('#f2f2ee', 8, 0.8);
+function makeRacket(col = 0xe2a23b, ghost = false) {
+  const g = new THREE.Group();
+  const M = (c, o) => ghost ? new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.2, depthWrite: false }) : mat(c, o);
+  if (!ghost) {
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.014, 0.22, 10), mat(0x202020)); handle.position.y = 0.03; g.add(handle);
+  }
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.24, 6), M(0xd8d23a, { metalness: 0.4, roughness: 0.35 })); shaft.position.y = 0.26;
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.105, ghost ? 0.01 : 0.006, 8, 40), M(col, { roughness: 0.4 })); frame.scale.set(1, 1.3, 1); frame.position.y = HEAD;
+  const str = new THREE.Mesh(new THREE.CircleGeometry(0.105, 32), new THREE.MeshBasicMaterial({ map: stringTex, transparent: true, opacity: ghost ? 0.12 : 1, side: THREE.DoubleSide, depthWrite: false }));
+  str.scale.set(1, 1.3, 1); str.position.y = HEAD;
+  g.add(shaft, frame, str); return g;
+}
+
+/* ---------- 人体モデル(右利き)。体の正面は -Z ----------
+   腕・脚は2関節IK、腰は肩より遅れてひねり、頭はシャトルを目で追い、足は床に着いて歩幅で踏み替える */
+const taperGeo = (top, seg = 14) => new THREE.CylinderGeometry(top, 1, 1, seg);   // 上(終点側)が細い
+const limbGeo = taperGeo(0.88);
+const limb = (r, m, geo = limbGeo) => { const x = new THREE.Mesh(geo, m); x.userData.r = r; return x; };
+const SR = V(0.19, 1.43, 0), SL = V(-0.19, 1.43, 0), HR = V(0.1, 0.9, 0), HL = V(-0.1, 0.9, 0), NECK = V(0, 1.53, 0.005);
+const UPPER = 0.30, FORE = 0.28, THIGH = 0.44, SHIN = 0.43;
+function setLimb(m, A, B) {
+  const d = B.clone().sub(A), L = Math.max(d.length(), 1e-4);
+  m.position.copy(A).add(B).multiplyScalar(0.5);
+  m.scale.set(m.userData.r, L, m.userData.r);
+  m.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize());
+}
+// 2関節IK。届かないときは伸ばせる位置まで引き寄せる
+function solve2(S, H, pole, a, b) {
+  const d = H.clone().sub(S); let L = d.length();
+  if (L > a + b - 0.005) { d.multiplyScalar((a + b - 0.005) / L); L = a + b - 0.005; }
+  L = Math.max(L, 0.08);
+  const end = S.clone().add(d), dn = d.clone().normalize();
+  const x = (a * a - b * b + L * L) / (2 * L), h = Math.sqrt(Math.max(a * a - x * x, 0));
+  const p = pole.clone().sub(dn.clone().multiplyScalar(pole.dot(dn))).normalize();
+  return { end, mid: S.clone().add(dn.multiplyScalar(x)).add(p.multiplyScalar(h)) };
+}
+const rotY = (v, a) => { const c = Math.cos(a), s = Math.sin(a); return V(v.x * c + v.z * s, v.y, -v.x * s + v.z * c); };
+function lathe(profile, m, sz = 0.7) {
+  const g = new THREE.Mesh(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 28), m);
+  g.scale.z = sz; return g;
+}
+function makeHuman(o) {
+  const root = new THREE.Group(), upper = new THREE.Group(); root.add(upper);
+  const skin = mat(o.skin, { roughness: 0.6 }), shirt = mat(o.shirt, { roughness: 0.85 }), trim = mat(o.trim, { roughness: 0.7 });
+  const shorts = mat(o.shorts, { roughness: 0.9 }), hairM = mat(o.hair, { roughness: 0.95 }), sockM = mat(0xf1f1ec, { roughness: 0.95 });
+  const shoeM = mat(o.shoe, { roughness: 0.5 }), soleM = mat(0xf4f4f0, { roughness: 0.8 }), dark = mat(0x161210, { roughness: 0.4 });
+  const white = mat(0xf7f5f0, { roughness: 0.3 }), lipM = mat(0xa8605a, { roughness: 0.6 }), bandM = mat(o.trim, { roughness: 0.9 });
+  const mesh = (geo, m, x = 0, y = 0, z = 0) => { const k = new THREE.Mesh(geo, m); k.position.set(x, y, z); return k; };
+  const body = [];   // 主観視点で隠す部位
+  const add = (parent, ...ms) => { parent.add(...ms); body.push(...ms); };
+
+  // 骨盤(腰は肩より遅れてひねる)
+  const hips = new THREE.Group(); add(upper, hips);
+  const shortsTop = lathe([[0.001, 0.82], [0.135, 0.83], [0.152, 0.88], [0.158, 0.95], [0.15, 1.03], [0.142, 1.06], [0.001, 1.06]], shorts, 0.72);
+  const belt = mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.025, 28), trim, 0, 1.05, 0); belt.scale.z = 0.72;
+  hips.add(shortsTop, belt);
+  // 胴:腹から胸へ広がるシャツ、襟、肩
+  const torso = lathe([[0.001, 1.0], [0.152, 1.0], [0.146, 1.08], [0.148, 1.17], [0.168, 1.27], [0.186, 1.36], [0.19, 1.42], [0.16, 1.48], [0.07, 1.52], [0.001, 1.52]], shirt, 0.66);
+  const collar = mesh(new THREE.TorusGeometry(0.058, 0.012, 8, 24), trim, 0, 1.515, 0.005); collar.rotation.x = Math.PI / 2;
+  const stripeL = mesh(new THREE.BoxGeometry(0.012, 0.42, 0.02), trim, -0.165, 1.2, 0), stripeR = stripeL.clone(); stripeR.position.x = 0.165;
+  stripeL.rotation.z = 0.06; stripeR.rotation.z = -0.06;
+  const logo = mesh(new THREE.CircleGeometry(0.03, 20), trim, 0.08, 1.37, -0.127); logo.rotation.y = Math.PI;
+  add(upper, torso, collar, stripeL, stripeR, logo);
+  // 首と頭(シャトルを目で追う)
+  const neck = mesh(new THREE.CylinderGeometry(0.043, 0.05, 0.11, 14), skin, 0, 1.53, 0.008);
+  add(upper, neck);
+  const headG = new THREE.Group(); headG.position.copy(NECK); headG.rotation.order = 'YXZ'; add(upper, headG);
+  const skull = mesh(new THREE.SphereGeometry(0.098, 28, 20), skin, 0, 0.15, 0.005); skull.scale.set(0.9, 1.08, 1.04);
+  const jaw = mesh(new THREE.SphereGeometry(0.07, 20, 12), skin, 0, 0.095, -0.022); jaw.scale.set(0.95, 0.85, 1.05);
+  const chin = mesh(new THREE.SphereGeometry(0.03, 12, 8), skin, 0, 0.07, -0.062);
+  const hairTop = mesh(new THREE.SphereGeometry(0.104, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52), hairM, 0, 0.168, 0.012); hairTop.scale.set(0.95, 1.08, 1.06);
+  const hairBack = mesh(new THREE.SphereGeometry(0.1, 20, 12), hairM, 0, 0.14, 0.03); hairBack.scale.set(0.93, 0.95, 0.95);
+  const bangs = mesh(new THREE.SphereGeometry(0.09, 20, 8, Math.PI * 0.15, Math.PI * 0.7, Math.PI * 0.18, Math.PI * 0.25), hairM, 0, 0.17, -0.012); bangs.rotation.y = Math.PI; bangs.scale.set(1, 1, 1.12);
+  const nose = mesh(new THREE.ConeGeometry(0.014, 0.036, 10), skin, 0, 0.142, -0.1); nose.rotation.x = -Math.PI / 2 - 0.25;
+  const eye = x => { const g = new THREE.Group(); g.position.set(x, 0.162, -0.084);
+    const w = mesh(new THREE.SphereGeometry(0.013, 10, 8), white); w.scale.set(1.3, 0.8, 0.6);
+    const p = mesh(new THREE.SphereGeometry(0.0072, 8, 6), dark, 0, 0, -0.006); g.add(w, p); return g; };
+  const brow = x => { const b = mesh(new THREE.BoxGeometry(0.03, 0.006, 0.008), hairM, x, 0.183, -0.088); b.rotation.z = x > 0 ? -0.12 : 0.12; return b; };
+  const mouth = mesh(new THREE.BoxGeometry(0.03, 0.006, 0.006), lipM, 0, 0.105, -0.087);
+  const ear = x => { const e = mesh(new THREE.SphereGeometry(0.022, 12, 8), skin, x, 0.148, 0.005); e.scale.set(0.45, 1, 0.75); return e; };
+  headG.add(skull, jaw, chin, hairBack, hairTop, bangs, nose, eye(-0.032), eye(0.032), brow(-0.033), brow(0.033), mouth, ear(-0.09), ear(0.09));
+
+  // 腕:肩、半袖、上腕(力こぶ)、ひじ、前腕、リストバンド
+  const arm = S => {
+    const sh = mesh(new THREE.SphereGeometry(0.062, 16, 12), shirt); sh.position.copy(S); sh.scale.set(1, 0.9, 0.9);
+    const up = limb(0.046, skin, taperGeo(0.82)), sleeve = limb(0.062, shirt, taperGeo(0.95)), fo = limb(0.04, skin, taperGeo(0.72));
+    const bicep = mesh(new THREE.SphereGeometry(1, 12, 10), skin);
+    const elbow = mesh(new THREE.SphereGeometry(0.038, 12, 8), skin), band = limb(0.034, bandM, taperGeo(1));
+    add(upper, sh, up, sleeve, bicep); upper.add(fo, elbow, band);
+    return { S, sh, up, sleeve, bicep, fo, elbow, band };
+  };
+  const RA = arm(SR), LA = arm(SL);
+  // 右手:グリップを握る指
+  const grip = new THREE.Group();
+  { const palm = mesh(new THREE.BoxGeometry(0.07, 0.085, 0.045), skin, 0, -0.005, 0.012);
+    for (let i = 0; i < 4; i++) { const f = mesh(new THREE.TorusGeometry(0.022, 0.0095, 6, 10, Math.PI * 1.25), skin, 0, 0.026 - i * 0.02, 0); f.rotation.y = Math.PI / 2; f.rotation.z = -0.3; grip.add(f); }
+    const th = mesh(new THREE.CylinderGeometry(0.01, 0.009, 0.05, 8), skin, -0.022, 0.03, -0.014); th.rotation.z = 0.35; grip.add(palm, th); }
+  const racket = makeRacket(o.racket);
+  // 左手:開いた手のひら
+  const lHand = new THREE.Group();
+  { lHand.add(mesh(new THREE.BoxGeometry(0.08, 0.09, 0.026), skin, 0, 0.045, 0));
+    [-0.029, -0.01, 0.009, 0.028].forEach((x, i) => { const L = 0.078 - Math.abs(i - 1.4) * 0.011;
+      const f1 = mesh(new THREE.CylinderGeometry(0.0085, 0.0092, L * 0.55, 8), skin, x, 0.09 + L * 0.27, 0), f2 = mesh(new THREE.CylinderGeometry(0.0075, 0.0085, L * 0.45, 8), skin, x, 0.09 + L * 0.77, -0.006);
+      f2.rotation.x = 0.25; lHand.add(f1, f2); });
+    const th = mesh(new THREE.CylinderGeometry(0.0095, 0.0105, 0.055, 8), skin, 0.048, 0.042, -0.01); th.rotation.z = -0.75; lHand.add(th); }
+  upper.add(grip, racket, lHand);
+
+  // 脚:短パン、太もも、ひざ、ふくらはぎ、ソックス、シューズ
+  const leg = () => {
+    const pant = limb(0.09, shorts, taperGeo(0.94)), thigh = limb(0.075, skin, taperGeo(0.7)), knee = mesh(new THREE.SphereGeometry(0.052, 14, 10), skin);
+    const shin = limb(0.056, skin, taperGeo(0.62)), calf = mesh(new THREE.SphereGeometry(1, 12, 10), skin), sock = limb(0.047, sockM, taperGeo(1.05));
+    const shoe = new THREE.Group();
+    const upperShoe = mesh(new THREE.BoxGeometry(0.095, 0.07, 0.2), shoeM, 0, 0.05, -0.03);
+    const toe = mesh(new THREE.SphereGeometry(0.05, 14, 10), shoeM, 0, 0.042, -0.13); toe.scale.set(0.95, 0.75, 1);
+    const heel = mesh(new THREE.SphereGeometry(0.048, 12, 8), shoeM, 0, 0.05, 0.065); heel.scale.set(1, 0.9, 0.8);
+    const sole = mesh(new THREE.BoxGeometry(0.104, 0.022, 0.29), soleM, 0, 0.011, -0.04);
+    const lace = mesh(new THREE.BoxGeometry(0.03, 0.006, 0.09), soleM, 0, 0.087, -0.07);
+    const swoosh = mesh(new THREE.BoxGeometry(0.098, 0.012, 0.12), trim, 0, 0.045, -0.02);
+    shoe.add(upperShoe, toe, heel, sole, lace, swoosh);
+    add(upper, pant, thigh, knee, shin, calf, sock, shoe);
+    return { pant, thigh, knee, shin, calf, sock, shoe };
+  };
+  const LR = leg(), LL = leg();
+  // 足元の影
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.34, 28), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.004; blob.scale.set(1, 0.75, 1);
+
+  const baseYaw = o.facing || 0, crouch = o.crouch || 0;
+  const feet = [{ hip: HR, x: 0.21, planted: null, from: V(), to: V(), t: 1 }, { hip: HL, x: -0.21, planted: null, from: V(), to: V(), t: 1 }];
+
+  function setArm(A, hand, pole) {
+    const r = solve2(A.S, hand, pole, UPPER, FORE);
+    setLimb(A.up, A.S, r.mid); setLimb(A.sleeve, A.S, A.S.clone().lerp(r.mid, 0.42)); setLimb(A.fo, r.mid, r.end);
+    setLimb(A.band, r.mid.clone().lerp(r.end, 0.8), r.mid.clone().lerp(r.end, 0.93));
+    A.elbow.position.copy(r.mid);
+    A.bicep.position.copy(A.S).lerp(r.mid, 0.55); A.bicep.quaternion.copy(A.up.quaternion); A.bicep.scale.set(0.05, 0.1, 0.05);
+    return r;
+  }
+  function setLeg(Lg, hip, foot, shoeYaw) {
+    const r = solve2(hip, foot, V(Math.sign(hip.x) * 0.15, 0, -1), THIGH, SHIN);
+    setLimb(Lg.thigh, hip, r.mid); setLimb(Lg.pant, hip.clone().add(V(0, 0.03, 0)), hip.clone().lerp(r.mid, 0.5)); setLimb(Lg.shin, r.mid, r.end);
+    setLimb(Lg.sock, r.end, r.end.clone().lerp(r.mid, 0.25)); Lg.knee.position.copy(r.mid);
+    Lg.calf.position.copy(r.mid).lerp(r.end, 0.3).add(rotY(V(0, 0, 0.02), 0)); Lg.calf.quaternion.copy(Lg.shin.quaternion); Lg.calf.scale.set(0.058, 0.11, 0.062);
+    Lg.shoe.position.set(r.end.x, r.end.y - 0.065, r.end.z); Lg.shoe.rotation.y = shoeYaw;
+  }
+  // p: ポーズ / look: 目で追う点(コート座標) / dt: 経過時間
+  function apply(p, look, dt = 1 / 60) {
+    const lunge = p.lunge + crouch * (root.position.y > 0.02 ? 0.2 : 1);   // 跳んでいる間は体を伸ばす
+    root.rotation.y = baseYaw + p.yaw;
+    upper.position.set(0, -lunge * 0.7, -lunge * 0.6);
+    root.updateMatrixWorld(true);
+    // 腰は肩の半分だけひねる
+    const hipYaw = -p.yaw * 0.5;
+    hips.rotation.y = hipYaw;
+    const hR = rotY(HR, hipYaw), hL = rotY(HL, hipYaw);
+    // 腕とラケット
+    const r = setArm(RA, p.hand, V(0.7, -0.6, 0.35));
+    racket.position.copy(r.end); racketQuat(p.dir, p.nrm, racket.quaternion);
+    grip.position.copy(r.end); grip.quaternion.copy(racket.quaternion);
+    const l = setArm(LA, p.lh, V(-0.7, -0.6, 0.35));
+    lHand.position.copy(l.end);
+    lHand.quaternion.setFromUnitVectors(V(0, 1, 0), l.end.clone().sub(l.mid).normalize());
+    // 頭:シャトルの方を向く(首の可動域で制限)
+    if (look) {
+      const d = upper.worldToLocal(world.localToWorld(look.clone())).sub(NECK);
+      const yaw = clamp(Math.atan2(-d.x, -d.z), -1.1, 1.1), pitch = clamp(Math.atan2(d.y - 0.15, Math.hypot(d.x, d.z)), -0.55, 0.85);
+      headG.rotation.y += (yaw - headG.rotation.y) * Math.min(1, dt * 12);
+      headG.rotation.x += (pitch - headG.rotation.x) * Math.min(1, dt * 12);
+    }
+    // 足:床に着いたまま。理想位置から離れたら片足ずつ踏み替える
+    const airborne = root.position.y > 0.02, tuck = p.tuck || 0;
+    feet.forEach((f, i) => {
+      const ideal = rotY(V(f.x, 0.07, f.x > 0 ? -0.06 - lunge * 1.1 : 0.1 + lunge * 0.25), -p.yaw);
+      const idealW = world.worldToLocal(root.localToWorld(ideal));
+      const other = feet[1 - i];
+      if (!f.planted || airborne) { f.planted = idealW.clone(); f.t = 1; }
+      else if (f.t >= 1 && other.t >= 1 && Math.hypot(f.planted.x - idealW.x, f.planted.z - idealW.z) > 0.15) { f.from.copy(f.planted); f.to.copy(idealW); f.t = 0; }
+      let lift = 0;
+      if (f.t < 1) { f.t = Math.min(1, f.t + dt / 0.13); f.planted.lerpVectors(f.from, f.to, ease(f.t)); lift = Math.sin(Math.PI * f.t) * 0.07; }
+      else f.planted.lerp(idealW, Math.min(1, dt * 3));
+      const pw = f.planted.clone(); pw.y = Math.max(pw.y, 0.07) + lift + (airborne ? tuck : 0);
+      setLeg(i === 0 ? LR : LL, i === 0 ? hR : hL, upper.worldToLocal(world.localToWorld(pw)), -p.yaw);
+    });
+    blob.position.set(root.position.x, 0.004, root.position.z);
+    blob.material.opacity = 0.28 * clamp(1 - root.position.y * 2, 0.3, 1);
+  }
+  return { root, upper, racket, apply, body, blob, headG };
+}
+const me = makeHuman({ skin: 0xdcb38e, shirt: 0xb5552e, trim: 0xf1e2c4, shorts: 0x1d2430, hair: 0x231a14, shoe: 0xf2f2ee, racket: 0xe2a23b, crouch: 0.04 });
+const rig = me.root, upper = me.upper, racket = me.racket;
+world.add(rig, me.blob);
+const opp = makeHuman({ skin: 0xd6ab86, shirt: 0x2f5f9a, trim: 0xe9eef5, shorts: 0x15181f, hair: 0x15110e, shoe: 0x2b2f3a, racket: 0xcfd6dc, facing: Math.PI, crouch: 0.1 });
+const feeder = { g: opp.root };
+world.add(opp.root, opp.blob);
+
+/* ---------- ストローク(一人称動画を参考にした姿勢) ----------
+   hand: 右手(グリップ)位置 / dir: グリップ→ヘッド方向 / nrm: 面の向き
+   yaw: 体のひねり(負=右へ向く) / lunge: 踏み込み / lh: 左手
+   off: 体から見た打点の位置 / bulge: 振り出し中に手が前へ膨らむ量
+   t: lead=振り出し→インパクト, follow=振り抜き, recover=構えに戻る, prep=準備にかける時間, prepAt=打点の何秒前に準備するか */
+const P = (hand, dir, nrm, yaw, lunge, lh, lhAim = false) => ({ hand: V(...hand), dir: V(...dir).normalize(), nrm: V(...nrm).normalize(), yaw, lunge, lh: V(...lh), lhAim });
+const READY = P([0.27, 1.17, -0.36], [-0.05, 0.96, -0.2], [0, 0.15, -1], 0, 0, [-0.22, 1.22, -0.42]);
+// ドライブ用の構え:ラケットを体の正面で立て、ヘッドは胸〜顔の高さ。左手は前
+const READY_D = P([0.16, 1.2, -0.42], [0.08, 0.9, -0.42], [0, 0.4, -0.9], 0, 0.06, [-0.24, 1.2, -0.36]);
+// スマッシュレシーブの構え:深く腰を落とし、ラケットは体の前で低めに(バック寄り)
+const READY_S = P([0.1, 1.02, -0.44], [-0.32, 0.55, -0.77], [0.1, 0.8, -0.55], 0, 0.3, [-0.3, 1.05, -0.3]);
+const STROKES = {
+  over: {
+    name: 'オーバーヘッド', off: { x: 0.22, z: -0.42 }, h: 2.35, bulge: V(0, 0.05, -0.08),
+    t: { lead: 0.13, follow: 0.22, recover: 0.45, prep: 0.35, prepAt: 0.8 },
+    prep: P([0.34, 1.62, 0.1], [0.1, -0.45, 0.88], [1, 0, 0], -0.9, 0, [-0.15, 2.0, -0.5], true),
+    contact: P([0, 0, 0], [0.1, 0.92, -0.38], [0, 0.3, -0.95], 0.05, 0, [-0.12, 1.15, -0.28]),
+    follow: P([-0.14, 1.05, -0.42], [-0.5, -0.6, -0.6], [0.6, -0.5, 0.6], 0.45, 0, [-0.35, 1.0, 0.05])
+  },
+  fore: {
+    name: 'フォアハンド', off: { x: 0.72, z: -0.42 }, h: 1.0, bulge: V(0.03, 0, -0.1),
+    t: { lead: 0.12, follow: 0.2, recover: 0.4, prep: 0.3, prepAt: 0.7 },
+    prep: P([0.5, 1.25, 0.08], [0.4, 0.5, 0.75], [-1, 0, 0.3], -0.6, 0.05, [-0.25, 1.35, -0.42]),
+    contact: P([0, 0, 0], [0.72, 0.05, -0.69], [0, 0.1, -1], -0.1, 0.05, [-0.2, 1.2, -0.3]),
+    follow: P([-0.2, 1.35, -0.38], [-0.8, 0.45, -0.35], [0, 0.3, 1], 0.35, 0, [-0.35, 1.1, 0.05])
+  },
+  under: {
+    name: 'アンダーハンド', off: { x: 0.32, z: -0.8 }, h: 0.7, bulge: V(0, -0.04, -0.1),
+    t: { lead: 0.13, follow: 0.22, recover: 0.45, prep: 0.35, prepAt: 0.8 },
+    prep: P([0.42, 1.05, -0.25], [0.35, -0.5, 0.79], [0, 1, 0], -0.25, 0.2, [-0.45, 1.25, 0.15]),
+    contact: P([0, 0, 0], [0.15, -0.55, -0.82], [0, 0.8, -0.55], 0, 0.26, [-0.45, 1.2, 0.18]),
+    follow: P([0.22, 1.55, -0.48], [0.05, 0.75, -0.65], [0, 0.65, 0.75], 0, 0.1, [-0.4, 1.2, 0.1])
+  },
+  // フォアのドライブ:小さく引いて手首を立て、体の前で面を押し出し、すぐ正面に戻す
+  dfh: {
+    name: 'フォアドライブ', off: { x: 0.62, z: -0.6 }, h: 1.35, bulge: V(0.06, 0.02, -0.12),
+    t: { lead: 0.09, follow: 0.12, recover: 0.2, prep: 0.18, prepAt: 0.4 },
+    prep: P([0.42, 1.3, -0.22], [0.55, 0.62, 0.56], [-0.35, 0.1, -1], -0.35, 0.08, [-0.3, 1.25, -0.32]),
+    contact: P([0, 0, 0], [0.78, 0.3, -0.55], [0, 0.05, -1], -0.06, 0.1, [-0.26, 1.15, -0.18]),
+    follow: P([0.02, 1.24, -0.5], [-0.72, 0.45, -0.52], [0.25, -0.35, 1], 0.2, 0.08, [-0.3, 1.1, -0.05])
+  },
+  // フォアのレシーブ:低い打点で面を上に向け、手首で押し上げてロブを返す
+  rfh: {
+    name: 'フォアレシーブ', off: { x: 0.62, z: -0.7 }, h: 0.85, bulge: V(0.03, 0.03, -0.1),
+    t: { lead: 0.09, follow: 0.16, recover: 0.28, prep: 0.15, prepAt: 0.36 },
+    prep: P([0.38, 1.05, -0.28], [0.6, 0.35, 0.6], [-0.3, 0.45, -1], -0.3, 0.32, [-0.32, 1.12, -0.25]),
+    contact: P([0, 0, 0], [0.72, 0.02, -0.7], [0, 0.6, -0.8], -0.1, 0.36, [-0.3, 1.05, -0.2]),
+    follow: P([0.22, 1.32, -0.55], [0.25, 0.75, -0.6], [0, 0.45, 0.9], 0, 0.28, [-0.3, 1.1, -0.15])
+  },
+  // バックのレシーブ:体の前〜左でラケットを横に寝かせ、親指で押し上げる
+  rbh: {
+    name: 'バックレシーブ', off: { x: -0.5, z: -0.7 }, h: 0.85, bulge: V(-0.03, 0.03, -0.1),
+    t: { lead: 0.09, follow: 0.16, recover: 0.28, prep: 0.15, prepAt: 0.36 },
+    prep: P([0.04, 1.08, -0.32], [-0.58, 0.45, 0.62], [0.35, 0.35, -1], 0.3, 0.32, [-0.22, 1.05, -0.2]),
+    contact: P([0, 0, 0], [-0.72, 0.05, -0.68], [0, 0.6, -0.8], 0.1, 0.36, [-0.25, 1.02, -0.12]),
+    follow: P([0.14, 1.34, -0.55], [-0.15, 0.8, -0.55], [0, 0.45, 0.9], -0.05, 0.28, [-0.28, 1.08, -0.12])
+  },
+  // バックのドライブ:ラケットを体の左に立てて引き、親指で押し出すように振る
+  dbh: {
+    name: 'バックドライブ', off: { x: -0.55, z: -0.6 }, h: 1.35, bulge: V(-0.06, 0.02, -0.12),
+    t: { lead: 0.09, follow: 0.12, recover: 0.2, prep: 0.18, prepAt: 0.4 },
+    prep: P([0.02, 1.3, -0.28], [-0.6, 0.6, 0.53], [0.35, 0.1, -1], 0.35, 0.08, [-0.18, 1.18, -0.24]),
+    contact: P([0, 0, 0], [-0.78, 0.28, -0.56], [0, 0.05, -1], 0.08, 0.1, [-0.24, 1.12, -0.12]),
+    follow: P([0.3, 1.32, -0.46], [0.7, 0.52, -0.48], [-0.25, -0.3, 1], -0.15, 0.08, [-0.3, 1.1, -0.05])
+  }
+};
+const strokeOf = s => s.hitH >= 1.7 ? 'over' : (s.hitH <= 0.85 ? 'under' : 'fore');
+const clonePose = p => ({ hand: p.hand.clone(), dir: p.dir.clone(), nrm: p.nrm.clone(), yaw: p.yaw, lunge: p.lunge, lh: p.lh.clone(), lhAim: p.lhAim });
+function safeLerp(a, b, t) { const v = a.clone().lerp(b, t); return v.lengthSq() < 1e-6 ? b.clone() : v.normalize(); }
+function lerpPose(a, b, t) {
+  return {
+    hand: a.hand.clone().lerp(b.hand, t), dir: safeLerp(a.dir, b.dir, t), nrm: safeLerp(a.nrm, b.nrm, t),
+    yaw: a.yaw + (b.yaw - a.yaw) * t, lunge: a.lunge + (b.lunge - a.lunge) * t, lh: a.lh.clone().lerp(b.lh, t), lhAim: false
+  };
+}
+const m4 = new THREE.Matrix4();
+function racketQuat(d, n, out) {
+  const y = d.clone().normalize();
+  let z = n.clone().sub(y.clone().multiplyScalar(n.dot(y)));
+  if (z.lengthSq() < 1e-4) z = V(1, 0, 0).sub(y.clone().multiplyScalar(y.x));
+  z.normalize();
+  const x = V().crossVectors(y, z);
+  m4.makeBasis(x, y, z); out.setFromRotationMatrix(m4);
+}
+let lastDt = 1 / 60, frameReal = 0, hitStop = 0, slowMo = 0;
+const applyPose = (p, dt = lastDt) => me.apply(p, shuttle.visible ? shuttle.position : null, dt);
+
+/* 残像(高速スイングのモーションブラー) */
+const GH = 6, ghosts = [];
+for (let i = 0; i < GH; i++) { const g = makeRacket(0xe2a23b, true); g.visible = false; scene.add(g); ghosts.push(g); }
+const prevP = V(), prevQ = new THREE.Quaternion(), curP = V(), curQ = new THREE.Quaternion(), prevHead = V(), curHead = V();
+let ghostInit = false;
+
+/* シャトル */
+const shuttle = new THREE.Group();
+const cork = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 10), mat(0xf6f3ea));
+const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.07, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.93, roughness: 0.6 }));
+skirt.position.y = -0.048; shuttle.add(cork, skirt); shuttle.scale.setScalar(1.6); world.add(shuttle);
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+shadow.rotation.x = -Math.PI / 2; world.add(shadow);
+
+const TRAILN = 46, trailPos = new Float32Array(TRAILN * 3), trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+const trail = new THREE.Line(trailGeo, trailMat);
+trail.frustumCulled = false; world.add(trail);
+let trailArr = [];
+
+const ACC = 0xe2a23b;
+let guideLine = null;
+const hitMarker = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.014, 8, 40), new THREE.MeshBasicMaterial({ color: ACC, transparent: true }));
+world.add(hitMarker);
+const landMarker = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.17, 32), new THREE.MeshBasicMaterial({ color: ACC, transparent: true, opacity: 0.85 }));
+landMarker.rotation.x = -Math.PI / 2; world.add(landMarker);
+const burst = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.08, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+world.add(burst); let burstAt = -9, burstBig = false;
+
+/* 打球の火花 */
+const PN = 320, pPos = new Float32Array(PN * 3).fill(-100), pVel = new Float32Array(PN * 3), pLife = new Float32Array(PN);
+const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const pMat = new THREE.PointsMaterial({ color: 0xffd27a, size: 0.045, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+const sparksObj = new THREE.Points(pGeo, pMat); sparksObj.frustumCulled = false; world.add(sparksObj);
+let pNext = 0;
+function sparks(p, n, color, power) {
+  pMat.color.set(color);
+  for (let k = 0; k < n; k++) {
+    const i = pNext; pNext = (pNext + 1) % PN;
+    pPos[i * 3] = p[0]; pPos[i * 3 + 1] = p[1]; pPos[i * 3 + 2] = p[2];
+    const v = V(rnd(), rnd() * 0.8 + 0.3, rnd()).normalize().multiplyScalar(power * (0.4 + Math.random()));
+    pVel[i * 3] = v.x; pVel[i * 3 + 1] = v.y; pVel[i * 3 + 2] = v.z; pLife[i] = 0.5 + Math.random() * 0.4;
+  }
+}
+function updateSparks(dt) {
+  for (let i = 0; i < PN; i++) {
+    if (pLife[i] <= 0) continue;
+    pLife[i] -= dt;
+    if (pLife[i] <= 0) { pPos[i * 3 + 1] = -100; continue; }
+    pVel[i * 3 + 1] -= 5 * dt;
+    pPos[i * 3] += pVel[i * 3] * dt; pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt; pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+}
+
+/* ---------- 効果音(タップ後のみ鳴る) ---------- */
+let actx = null;
+function audio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } } if (actx && actx.state === 'suspended') actx.resume(); return actx; }
+function noise(dur, f0, f1, gain, q) {
+  const a = actx; if (!a) return;
+  const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(); src.buffer = buf;
+  const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+  bp.frequency.setValueAtTime(f0, a.currentTime); bp.frequency.exponentialRampToValueAtTime(f1, a.currentTime + dur);
+  const g = a.createGain(); g.gain.setValueAtTime(0.0001, a.currentTime); g.gain.exponentialRampToValueAtTime(gain, a.currentTime + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+  src.connect(bp).connect(g).connect(a.destination); src.start();
+}
+const whoosh = () => noise(0.16, 600, 2000, 0.16, 1.2);
+const pang = (lift = 0, gain = 0.6) => { noise(0.055, 3000 + lift, 2300 + lift, gain, 3); noise(0.03, 1100, 850, gain * 0.6, 2); };
+function chime(n) {
+  const a = actx; if (!a) return;
+  [0, 4, 7, 12].slice(0, n).forEach((s, i) => {
+    const o = a.createOscillator(), g = a.createGain(), t0 = a.currentTime + i * 0.07;
+    o.type = 'triangle'; o.frequency.value = 660 * Math.pow(2, s / 12);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+    o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + 0.32);
+  });
+}
+
+/* ---------- 状態 ---------- */
+const ui = { mode: 'rally', shot: 'clear', side: 'mix', tempo: 1, accel: true, interval: 2, vary: 0.15, speed: 1, guide: true, foot: true, view: 'fp' };
+let cur = null, state = 'idle', running = false, sim = 0, phaseAt = 0, flightStart = 0, swung = false;
+let ret = null, retStart = 0, doneReal = 0, feederHitT = -9;
+let sw = { phase: 'ready', start: 0, from: clonePose(READY_D), stroke: 'dfh', live: false };
+let pose = clonePose(READY_D);
+const stats = { feeds: 0, hits: 0, just: 0, errSum: 0, errN: 0, errs: [] };
+const bodyPos = V(RB.x, 0, RB.z), lookCur = V(0, 1.4, -3);
+const feederPos = V(0.4, 0, -2.6);
+let rally = 0, justStreak = 0, best = 0, shake = 0;
+
+
+const isRally = () => ui.mode !== 'knock';
+const baseOf = () => ui.mode === 'rally' ? RB : (ui.mode === 'smash' ? SB : HOME);
+const readyPose = () => ui.mode === 'rally' ? READY_D : (ui.mode === 'smash' ? READY_S : READY);
+const pickSide = (fh, bh) => ui.side === 'mix' ? (Math.random() < 0.5 ? fh : bh) : (ui.side === 'dfh' ? fh : bh);
+const bestKey = () => 'shuttle-best-' + ui.mode;
+function loadBest() { try { return +localStorage.getItem(bestKey()) || 0; } catch (e) { return 0; } }
+const tempoNow = () => ui.tempo * (ui.accel ? Math.min(1.3, 1 + Math.floor(rally / 5) * 0.03) : 1);
+
+/* ---------- ノック ---------- */
+function buildKnock(vary) {
+  const s = SHOTS[ui.shot];
+  const from = { x: s.from.x + rnd() * vary * 0.3, y: s.from.y, z: s.from.z };
+  const to = { x: clamp(s.to.x + rnd() * vary, -2.9, 2.9), z: clamp(s.to.z + rnd() * vary, 0.6, 6.6) };
+  const r = solve(from, to, s.angles), p = r.pts;
+  let hi = -1, crossed = false;
+  for (let i = 1; i < p.length; i++) {
+    if (!crossed && p[i][2] > 0.25) crossed = true;
+    if (crossed && p[i][1] <= s.hitH && p[i][1] < p[i - 1][1]) { hi = i; break; }
+  }
+  if (hi < 0) hi = Math.max(1, p.length - 1 - Math.round(0.12 / r.dt));
+  return { name: s.name, stroke: strokeOf(s), from, path: r, tHit: hi * r.dt, hitPos: p[hi], land: r.land };
+}
+// 打点(hx, hz)を高さ h で通り、ネット上を高さ netH 前後で越える軌道を探す(ドライブが浮かないように)
+// テンポごとの打点の高さとネット上の通過高さ。速いほど両方がネットの高さ(1.55m)に近づき、ほぼ一直線になる
+function driveLine(tp) {
+  return { h: clamp(1.35 + (tp - 1) * 0.6, 1.2, 1.5), netH: clamp(1.66 - (tp - 1) * 0.15, 1.615, 1.74) };
+}
+function shoot(from, hx, hz, h, netH) {
+  const dx = hx - from.x, dz = hz - from.z, D = Math.hypot(dx, dz), ux = dx / D, uz = dz / D, dir = Math.sign(dz);
+  let best = null;
+  for (let deg = -4; deg <= 36; deg += 1) {
+    const a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a), vel = s => ({ x: ux * s * ca, y: s * sa, z: uz * s * ca });
+    let lo = 1, hi = 90;
+    for (let i = 0; i < 26; i++) {
+      const mid = (lo + hi) / 2, c = crossing(simulate(from, vel(mid), 1 / 120, 2), hz, dir);
+      if (!c || c.pos[1] < h) lo = mid; else hi = mid;
+    }
+    const r = simulate(from, vel(hi), 1 / 240, 4), c = crossing(r, hz, dir);
+    if (!c || Math.abs(c.pos[1] - h) > 0.05) continue;
+    const n = crossing(r, 0, dir);
+    if (!n || n.pos[1] < C.NET + 0.04) continue;
+    const score = Math.abs(n.pos[1] - netH);
+    if (!best || score < best.score) best = { score, r, c };
+  }
+  return best;
+}
+
+/* ---------- ドライブラリー:相手の打点から、自分の打点の面を胸の高さで通る平行球 ---------- */
+function buildDrive(from) {
+  const side = pickSide('dfh', 'dbh');
+  const off = STROKES[side].off, tp = tempoNow();
+  const hx = clamp(RB.x + off.x + rnd() * ui.vary * 0.6, -2.7, 2.7), hz = RB.z + off.z;
+  // ネットすれすれを通し、速いほど打点を上げて軌道をまっすぐにする(落ちる量を減らす)
+  const { h: h0, netH } = driveLine(tp), h = clamp(h0 + rnd() * ui.vary * 0.15, 1.15, 1.55);
+  let r, c;
+  const b = shoot(from, hx, hz, h, netH);
+  if (b) { r = b.r; c = b.c; }
+  else {
+    const landZ = 3.5 + (tp - 1) * 5, f = (landZ - from.z) / (hz - from.z);
+    r = solve(from, { x: from.x + (hx - from.x) * f, z: landZ }, [6, 9, 12, 15, 18, 22]);
+    c = crossing(r, hz, 1) || { t: r.landT - 0.1, pos: posAt(r, r.landT - 0.1) };
+  }
+  return { name: STROKES[side].name, stroke: side, from, path: r, tHit: c.t, hitPos: c.pos, land: r.land };
+}
+
+/* ---------- スマッシュレシーブ:相手が後方からジャンプスマッシュ、腰の高さ(約0.85m)で受ける ---------- */
+function buildSmash(from) {
+  const side = pickSide('rfh', 'rbh'), off = STROKES[side].off, tp = tempoNow();
+  const hx = clamp(SB.x + off.x + rnd() * ui.vary * 0.6, -2.6, 2.6), hz = SB.z + off.z, h = 0.85 + rnd() * ui.vary * 0.3;
+  const ang = -10 - (tp - 1) * 8, angles = [ang, ang + 2, ang - 2, ang + 4, ang - 4, ang + 7, ang + 10];   // 高い打点から角度をつけて打ち下ろす
+  let lo = hz + 0.05, hi = hz + 5, best = null;
+  for (let it = 0; it < 12; it++) {   // 打点の高さが h になる落下点を二分法で探す
+    const landZ = (lo + hi) / 2, f = (landZ - from.z) / (hz - from.z);
+    const r = solve(from, { x: from.x + (hx - from.x) * f, z: landZ }, angles), c = crossing(r, hz, 1);
+    if (!c) { lo = landZ; continue; }
+    best = { r, c };
+    if (c.pos[1] < h) lo = landZ; else hi = landZ;
+  }
+  const r = best.r, c = best.c;
+  return { name: STROKES[side].name, stroke: side, from, path: r, tHit: c.t, hitPos: c.pos, land: r.land };
+}
+const serveFrom = () => ui.mode === 'rally' ? { x: OB.x - 0.4 + rnd() * 0.2, y: 1.3, z: OPP_PLANE } : { x: SO.x - 0.35 + rnd() * 0.3, y: SMASH_H, z: SO.z + 0.35 };
+const buildRally = from => ui.mode === 'rally' ? buildDrive(from) : buildSmash(from);
+
+function updateGuide() {
+  if (guideLine) { world.remove(guideLine); guideLine.geometry.dispose(); guideLine = null; }
+  if (!cur) return;
+  const pts = [], end = isRally() ? Math.min(cur.path.pts.length, Math.ceil((cur.tHit + 0.15) / cur.path.dt)) : cur.path.pts.length;
+  for (let i = 0; i < end; i += 3) { const q = cur.path.pts[i]; pts.push(V(q[0], q[1], q[2])); }
+  guideLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: ACC, dashSize: 0.18, gapSize: 0.12, transparent: true, opacity: 0.6 }));
+  guideLine.computeLineDistances(); world.add(guideLine);
+  hitMarker.position.set(cur.hitPos[0], cur.hitPos[1], cur.hitPos[2]);
+  landMarker.position.set(cur.land.x, 0.008, cur.land.z);
+}
+function placeShuttle(x, y, z, dx, dy, dz) {
+  shuttle.visible = true; shuttle.position.set(x, y, z);
+  if (dx !== undefined) {
+    const d = V(dx, dy, dz);
+    if (d.lengthSq() > 1e-10) shuttle.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize());
+  }
+  shadow.position.set(x, 0.007, z); shadow.visible = y > 0.02;
+}
+function pushTrail(x, y, z) {
+  trailArr.push(x, y, z); if (trailArr.length > TRAILN * 3) trailArr.splice(0, 3);
+  trailPos.set(trailArr); trailGeo.setDrawRange(0, trailArr.length / 3); trailGeo.attributes.position.needsUpdate = true;
+}
+function setStateText(t) { $('#hudState').textContent = t; }
+function preview() {
+  if (isRally()) {
+    const f = serveFrom(); f.x = ui.mode === 'rally' ? OB.x - 0.4 : SO.x - 0.2;
+    cur = buildRally(f);
+  } else cur = buildKnock(0);
+  placeFeeder([cur.from.x, cur.from.y, cur.from.z], -9);
+  updateGuide();
+  placeShuttle(cur.from.x, cur.from.y, cur.from.z, 0, 1, 0);
+  trailArr = []; pushTrail(cur.from.x, cur.from.y, cur.from.z);
+  state = 'idle'; ret = null; setStateText('待機中');
+  $('#hudShot').textContent = ui.mode === 'rally' ? 'ドライブラリー' : (ui.mode === 'smash' ? 'スマッシュレシーブ' : SHOTS[ui.shot].name);
+}
+function startFeed() {
+  cur = isRally() ? buildRally(serveFrom()) : buildKnock(ui.vary);
+  updateGuide();
+  placeShuttle(cur.from.x, cur.from.y, cur.from.z, 0, 1, 0);
+  WIND = ui.mode === 'smash' || (ui.mode === 'knock' && ui.shot === 'smash') ? 0.6 : 0.4;
+  state = 'windup'; phaseAt = sim; placeFeeder([cur.from.x, cur.from.y, cur.from.z], sim + WIND); swung = false; ret = null; trailArr = [];
+  setStateText('球出し · ' + cur.name);
+}
+const flightT = () => state === 'flight' ? sim - flightStart : (state === 'windup' ? sim - phaseAt - WIND : -9);
+const incoming = () => state === 'windup' || state === 'flight';
+
+/* ---------- スイングの段階 ----------
+   ready → prep(球が来ると自動で準備) → fwd(タップで振り出し、lead秒後にインパクト)
+   → follow(振り抜き) → recover(構えに戻る) */
+const T = () => STROKES[sw.stroke].t;
+function setPhase(ph) { sw.from = clonePose(pose); sw.phase = ph; sw.start = sim; }
+function contactTarget() {
+  const tc = sw.start + T().lead;
+  if (sw.live && cur && state === 'flight') { const p = posAt(cur.path, tc - flightStart); return V(p[0], p[1], p[2]); }
+  if (cur && incoming()) return V(cur.hitPos[0], cur.hitPos[1], cur.hitPos[2]);
+  const st = STROKES[sw.stroke];
+  return world.worldToLocal(upper.localToWorld(V(st.off.x, st.h, st.off.z)));
+}
+function contactPose() {
+  const c = clonePose(STROKES[sw.stroke].contact);
+  const local = upper.worldToLocal(world.localToWorld(contactTarget()));
+  c.hand = local.sub(c.dir.clone().multiplyScalar(HEAD));
+  return c;
+}
+function prepPose() {
+  const p = clonePose(STROKES[sw.stroke].prep);
+  if (p.lhAim && shuttle.visible) {
+    const s = upper.worldToLocal(shuttle.getWorldPosition(V()));
+    p.lh = SL.clone().add(s.sub(SL).normalize().multiplyScalar(0.55));
+  }
+  return p;
+}
+function evalPose() {
+  const t = sim - sw.start, tm = T();
+  switch (sw.phase) {
+    case 'ready': { const r = clonePose(readyPose()); r.hand.y += Math.sin(sim * 2.2) * 0.008; return r; }
+    case 'prep': return lerpPose(sw.from, prepPose(), ease(clamp(t / tm.prep, 0, 1)));
+    case 'fwd': {
+      const k = clamp(t / tm.lead, 0, 1), p = lerpPose(sw.from, contactPose(), k * k);
+      p.hand.add(STROKES[sw.stroke].bulge.clone().multiplyScalar(Math.sin(Math.PI * k)));
+      return p;
+    }
+    case 'follow': return lerpPose(sw.from, STROKES[sw.stroke].follow, easeOut(clamp(t / tm.follow, 0, 1)));
+    case 'recover': return lerpPose(sw.from, readyPose(), ease(clamp(t / tm.recover, 0, 1)));
+  }
+  return clonePose(readyPose());
+}
+function swingPress() {
+  audio();
+  if (sw.phase === 'fwd' || sw.phase === 'follow') return;
+  sw.stroke = cur ? cur.stroke : (ui.mode === 'rally' ? 'dfh' : (ui.mode === 'smash' ? 'rbh' : 'over'));
+  sw.live = state === 'flight' && !swung;
+  if (sw.live) swung = true;
+  setPhase('fwd'); whoosh();
+  // フレームの途中で押した分も時刻に反映(判定を連続値にする)
+  sw.start = sim + Math.min((performance.now() - frameReal) / 1000, 0.05) * ui.speed;
+}
+
+/* ---------- 判定 ---------- */
+function judgeTiming(err) {
+  const ae = Math.abs(err);
+  if (ae <= 0.05) return { kind: 'just', q: 1, main: 'JUST!', color: 'var(--just)' };
+  const side = err < 0 ? 'early' : 'late', word = err < 0 ? '早め' : '遅め';
+  const color = err < 0 ? 'var(--early)' : 'var(--late)';
+  if (ae <= 0.12) return { kind: side, q: 0.7, main: 'GOOD', sub: `少し${word}`, color };
+  if (ae <= 0.22) return { kind: side, q: 0.4, main: err < 0 ? '早い' : '遅い', sub: `${word}・浮いた`, color };
+  return null;
+}
+function onContact() {
+  if (!sw.live || state !== 'flight') return;
+  const tc = sw.start + T().lead, t = tc - flightStart, err = t - cur.tHit;
+  const q = posAt(cur.path, t);
+  const head = world.worldToLocal(racket.localToWorld(V(0, HEAD, 0)));
+  const reach = head.distanceTo(V(q[0], q[1], q[2]));
+  let j = judgeTiming(err);
+  if (j && reach > 0.38) j = null;
+  if (!j) {
+    stats.errs.push({ err, kind: 'miss' });
+    const why = reach > 0.38 && Math.abs(err) <= 0.22 ? '届いていない' : (err < 0 ? `${err.toFixed(2)}秒 早すぎ` : `+${err.toFixed(2)}秒 遅すぎ`);
+    showJudge('空振り', why, 'var(--miss)'); renderStats(); return;
+  }
+  hitShuttle(err, j, tc);
+}
+function hitShuttle(err, j, tc = sim) {
+  stats.hits++; if (j.kind === 'just') stats.just++;
+  stats.errSum += Math.abs(err); stats.errN++; stats.errs.push({ err, kind: j.kind });
+  const p = posAt(cur.path, tc - flightStart), from = { x: p[0], y: Math.max(p[1], 0.4), z: p[2] };
+  if (ui.mode === 'smash') {
+    comboHit(j.kind);
+    // 良い当たりは奥へ高いロブ、ずれると短く浮いてチャンスボールになる
+    const good = j.q >= 0.7;
+    ret = solve(from, { x: clamp(err * 6 + rnd() * 0.5, -2.5, 2.5), z: good ? -5.7 : -4.0 }, good ? [52, 46, 58, 40, 64] : [40, 46, 52, 34]);
+    let o = null;
+    for (let i = 1; i < ret.pts.length; i++) { const q = ret.pts[i]; if (q[1] < ret.pts[i - 1][1] && q[1] <= SMASH_H && q[2] < -2.2) { o = { t: i * ret.dt, pos: q }; break; } }
+    ret.tOpp = o ? o.t : Math.max(0.3, ret.landT - 0.1);
+    ret.oppPos = o ? o.pos : posAt(ret, ret.tOpp);
+    ret.oppPos = [ret.oppPos[0], SMASH_H, ret.oppPos[2]];
+    placeFeeder(ret.oppPos, tc + ret.tOpp);
+    showJudge(j.main, (j.sub ? j.sub.replace('浮いた', '短い') + ' ' : '') + (err >= 0 ? '+' : '') + err.toFixed(2) + '秒', j.color);
+  } else if (ui.mode === 'rally') {
+    comboHit(j.kind);
+    const tp = tempoNow();
+    // 良い当たりはネットすれすれ、ずれると浮いた球になる
+    const ox = clamp(OB.x + err * 8 + rnd() * 0.25, -2.7, 2.7);
+    const line = driveLine(tp);
+    const b = shoot(from, ox, OPP_PLANE, line.h, j.q >= 0.7 ? line.netH : 2.05);
+    ret = b ? b.r : solve(from, { x: ox, z: -(3.5 + (tp - 1) * 5) }, j.q >= 0.7 ? [6, 9, 12, 15, 18, 22] : [24, 30, 36, 42]);
+    const c = crossing(ret, OPP_PLANE, -1);
+    ret.tOpp = c ? c.t : Math.max(0.2, ret.landT - 0.08);
+    ret.oppPos = c ? c.pos : posAt(ret, ret.tOpp);
+    placeFeeder(ret.oppPos, tc + ret.tOpp);
+    showJudge(j.main, (j.sub ? j.sub + ' ' : '') + (err >= 0 ? '+' : '') + err.toFixed(2) + '秒', j.color);
+  } else {
+    const to = { x: clamp(err * 12 + rnd() * 0.3, -3.5, 3.5), z: -5.6 + (1 - j.q) * 2.6 };
+    ret = solve(from, to, [28, 36, 44, 55, 20, 65]);
+    showJudge(j.main, (j.sub ? j.sub + ' ' : '') + (err >= 0 ? '+' : '') + err.toFixed(2) + '秒', j.color);
+  }
+  state = 'return'; retStart = tc; setStateText('返球');
+  burst.position.set(p[0], p[1], p[2]); burstAt = sim;
+  const col = isRally() ? tierColor(rally) : '#ffd27a';
+  sparks(p, j.kind === 'just' ? 26 + Math.min(rally, 40) : 12, col, j.kind === 'just' ? 3.2 : 2);
+  pang(Math.min(rally, 40) * 22, j.kind === 'just' ? 0.7 : 0.5);
+  if (j.kind === 'just') shake = Math.max(shake, 0.012);
+  renderStats();
+}
+// 相手が返す(必ず返球)
+function opponentHit() {
+  const p = ret.oppPos;
+  cur = ui.mode === 'rally' ? buildDrive({ x: p[0], y: clamp(p[1], 1.15, 1.6), z: OPP_PLANE })
+                            : buildSmash({ x: p[0], y: SMASH_H, z: p[2] });
+  updateGuide();
+  state = 'flight'; flightStart = retStart + ret.tOpp; swung = false; trailArr = []; ret = null;
+  setStateText('ラリー中 · ' + cur.name);
+  pang(ui.mode === 'smash' ? 200 : -600, ui.mode === 'smash' ? 0.5 : 0.3);
+}
+function rallyMiss(text, sub) {
+  showJudge(text, sub, 'var(--miss)');
+  comboEnd();
+}
+
+/* ---------- ラリーカウンター(ゲーム風の演出) ---------- */
+const TIERS = [[100, '#7fe3ff'], [50, '#c08cff'], [30, '#ff5f8f'], [20, '#ff8a3d'], [10, '#e2a23b'], [0, '#e6eee8']];
+const tierColor = n => TIERS.find(t => n >= t[0])[1];
+const comboEl = $('#combo'), comboNum = $('#comboNum');
+function restartAnim(el, cls) { el.classList.remove('pop', 'big', 'break'); void el.offsetWidth; if (cls) el.classList.add(cls); }
+function renderCombo(anim) {
+  const col = tierColor(rally);
+  comboNum.textContent = rally;
+  comboEl.style.setProperty('--tier', col);
+  comboEl.style.setProperty('--glow', Math.min(rally, 60) * 0.7 + 'px');
+  $('#pBest').textContent = 'BEST ' + best;
+  $('#pSpeed').textContent = 'SPEED ×' + tempoNow().toFixed(2);
+  $('#pJust').hidden = justStreak < 2; $('#pJust').textContent = 'JUST ×' + justStreak;
+  if (anim) restartAnim(comboEl, anim);
+}
+function banner(text, color) {
+  const b = $('#banner'); b.textContent = text; b.style.setProperty('--bc', color);
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+}
+function flash(color) { const f = $('#flash'); f.style.setProperty('--fc', color); f.classList.remove('show'); void f.offsetWidth; f.classList.add('show'); }
+function comboHit(kind) {
+  const prevSpeed = tempoNow();
+  if (rally === 0) bestBefore = best;
+  rally++; justStreak = kind === 'just' ? justStreak + 1 : 0;
+  const milestone = rally % 10 === 0;
+  renderCombo(milestone ? 'big' : 'pop');
+  if (milestone) { banner(rally + ' RALLY!', tierColor(rally)); flash(tierColor(rally)); chime(4); shake = 0.03; }
+  else if (justStreak >= 3 && justStreak % 3 === 0) { banner('JUST ×' + justStreak, 'var(--just)'); chime(2); }
+  else if (tempoNow() > prevSpeed + 1e-6) banner('SPEED UP', 'var(--early)');
+  if (rally > best) { best = rally; try { localStorage.setItem(bestKey(), best); } catch (e) {} }
+  renderStats();
+}
+let lastRecordWasNew = false, bestBefore = 0;
+function comboEnd() {
+  if (rally > 0) {
+    const n = rally;
+    lastRecordWasNew = n > bestBefore;
+    setTimeout(() => banner(lastRecordWasNew ? 'NEW BEST ' + n : 'RALLY ' + n, lastRecordWasNew ? 'var(--accent)' : 'var(--fg)'), 350);
+    restartAnim(comboEl, 'break');
+    setTimeout(() => { rally = 0; justStreak = 0; restartAnim(comboEl, null); renderCombo('pop'); }, 700);
+  }
+}
+
+/* ---------- UI ---------- */
+const judgeEl = $('#judge'); let judgeTimer = 0;
+function showJudge(main, sub, color) {
+  $('#jMain').textContent = main; $('#jMain').style.color = color;
+  $('#jSub').textContent = sub || ''; $('#jSub').hidden = !sub;
+  judgeEl.classList.add('show'); clearTimeout(judgeTimer);
+  judgeTimer = setTimeout(() => judgeEl.classList.remove('show'), 900);
+}
+function renderStats() {
+  const pct = (n, d) => d ? Math.round(n / d * 100) + '%' : '–';
+  const avg = stats.errN ? (stats.errSum / stats.errN).toFixed(2) + 's' : '–';
+  const vals = isRally()
+    ? [[stats.hits, '打球'], [pct(stats.just, stats.hits), 'ジャスト率'], [avg, '平均ずれ'], [best, ui.mode === 'smash' ? '最高レシーブ' : '最高ラリー']]
+    : [[stats.feeds, '球数'], [pct(stats.hits, stats.feeds), '返球率'], [pct(stats.just, stats.feeds), 'ジャスト'], [avg, '平均ずれ']];
+  vals.forEach((v, i) => { $('#n' + i).textContent = v[0]; $('#l' + i).textContent = v[1]; });
+  const tr = $('#track'); tr.querySelectorAll('.dot').forEach(d => d.remove());
+  const last = stats.errs.slice(-12);
+  last.forEach((e, i) => {
+    const d = document.createElement('span'); d.className = 'dot' + (i === last.length - 1 ? ' last' : '');
+    d.style.left = (clamp((e.err + 0.25) / 0.5, 0.02, 0.98) * 100) + '%';
+    d.style.background = { just: 'var(--just)', early: 'var(--early)', late: 'var(--late)', miss: 'var(--miss)' }[e.kind];
+    tr.appendChild(d);
+  });
+}
+const chips = $('#shotChips');
+for (const [k, s] of Object.entries(SHOTS)) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.k = k;
+  b.setAttribute('aria-pressed', k === ui.shot); b.innerHTML = `<b>${s.name}</b><span>${s.sub}</span>`;
+  b.onclick = () => {
+    ui.shot = k; chips.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.k === k));
+    if (!running && (state === 'idle' || state === 'done')) preview();
+  };
+  chips.appendChild(b);
+}
+function segGroup(id, attr, onPick) {
+  const el = $(id);
+  el.querySelectorAll('button').forEach(b => b.onclick = () => {
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    onPick(b.dataset[attr]);
+  });
+}
+segGroup('#viewSeg', 'v', v => { ui.view = v; applyView(); });
+segGroup('#speedSeg', 's', v => ui.speed = Number(v));
+segGroup('#sideSeg', 'v', v => { ui.side = v; if (!running && state !== 'flight' && state !== 'return') preview(); });
+segGroup('#tempoSeg', 'v', v => { ui.tempo = Number(v); renderCombo(); });
+segGroup('#modeSeg', 'm', m => setMode(m));
+$('#accel').onchange = e => { ui.accel = e.target.checked; renderCombo(); };
+$('#interval').oninput = e => { ui.interval = +e.target.value; $('#oInterval').textContent = ui.interval.toFixed(1) + '秒'; };
+$('#vary').oninput = e => { ui.vary = e.target.value / 100; $('#oVary').textContent = '±' + e.target.value + 'cm'; };
+$('#guide').onchange = e => ui.guide = e.target.checked;
+$('#foot').onchange = e => ui.foot = e.target.checked;
+function setCollapsed(c) {
+  $('#app').classList.toggle('collapsed', c);
+  $('#sheetToggle').textContent = c ? '設定' : 'たたむ';
+}
+function setRunning(on) {
+  running = on;
+  setCollapsed(on); $('#miniStop').hidden = !on;
+  $('#startBtn').textContent = on ? '停止' : (ui.mode === 'knock' ? 'ノック開始' : 'ラリー開始');
+}
+$('#startBtn').onclick = () => {
+  audio(); setRunning(!running);
+  if (running && (state === 'idle' || state === 'done')) startFeed();
+  if (!running && isRally() && (state === 'flight' || state === 'return')) { state = 'done'; doneReal = performance.now(); comboEnd(); preview(); }
+};
+$('#oneBtn').onclick = () => { audio(); setRunning(false); startFeed(); };
+function setMode(m) {
+  ui.mode = m; setRunning(false);
+  document.querySelectorAll('[data-for]').forEach(g => g.hidden = !g.dataset.for.split(' ').includes(m));
+  $('#oneBtn').hidden = m !== 'knock'; $('#actions').classList.toggle('solo', m !== 'knock');
+  comboEl.hidden = m === 'knock';
+  $('#comboLab').textContent = m === 'smash' ? 'RECEIVE' : 'RALLY';
+  best = loadBest(); rally = 0; justStreak = 0; renderCombo();
+  Object.assign(stats, { feeds: 0, hits: 0, just: 0, perfect: 0, errSum: 0, errN: 0, errs: [] });
+  sw.phase = 'ready'; pose = clonePose(readyPose());
+  const b = baseOf(); bodyPos.set(b.x, 0, b.z);
+  preview(); renderStats();
+}
+$('#hitBtn').onclick = () => swingPress();
+$('#c').addEventListener('pointerdown', () => swingPress());
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); if (!e.repeat) swingPress(); }
+});
+$('#sheetToggle').onclick = () => setCollapsed(!$('#app').classList.contains('collapsed'));
+$('#miniStop').onclick = () => $('#startBtn').click();
+function applyView() {
+  const xr = renderer.xr.isPresenting, fp = ui.view === 'fp';
+  rig.visible = !xr;
+  // 主観では頭・胴・上腕を隠し、前腕・手・ラケットだけを見せる
+  me.body.forEach(m => m.visible = !fp);
+}
+
+/* ---------- WebXR(Questのパススルー) ---------- */
+const controllers = [];
+function enterAR() {
+  scene.background = null; scene.fog = null;
+  gym.visible = matOwn.visible = linesOwn.visible = false;
+  world.position.set(0, 0, -baseOf().z); applyView();
+  for (let i = 0; i < 2; i++) {
+    const c = renderer.xr.getController(i);
+    if (!c.userData.racket) { const r = makeRacket(); r.rotation.x = -Math.PI / 2; c.add(r); c.userData.racket = r; c.addEventListener('select', () => xrSwing(false)); }
+    scene.add(c); controllers.push(c);
+  }
+}
+function exitAR() {
+  scene.background = BG; scene.fog = FOG;
+  gym.visible = matOwn.visible = linesOwn.visible = true;
+  world.position.set(0, 0, 0); controllers.forEach(c => scene.remove(c)); controllers.length = 0; applyView(); resize();
+}
+if (navigator.xr && navigator.xr.isSessionSupported) {
+  navigator.xr.isSessionSupported('immersive-ar').then(ok => { $('#arBtn').hidden = !ok; }).catch(() => {});
+}
+$('#arBtn').onclick = async () => {
+  try {
+    const s = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local-floor'] });
+    renderer.xr.setReferenceSpaceType('local-floor');
+    await renderer.xr.setSession(s); enterAR(); s.addEventListener('end', exitAR);
+  } catch (e) { showJudge('AR開始失敗', 'HTTPSで開いているか確認してください', 'var(--late)'); }
+};
+function xrSwing(contact) {
+  if (state !== 'flight' || swung) return;
+  const err = sim - flightStart - cur.tHit, j = judgeTiming(err);
+  if (j || contact) { swung = true; hitShuttle(err, j || { kind: err < 0 ? 'early' : 'late', q: 0.4, main: 'HIT', color: 'var(--late)' }); }
+}
+function checkContact() {
+  if (state !== 'flight' || swung) return;
+  const sp = shuttle.getWorldPosition(V());
+  for (const c of controllers) { if (c.localToWorld(V(0, 0, -HEAD)).distanceTo(sp) < 0.3) { xrSwing(true); return; } }
+}
+
+/* ---------- 相手の動き:自分と同じ人体モデルとストロークで、打点にラケットを合わせて振る ---------- */
+const feederContact = V(0, 1.3, -2);
+let feederStroke = 'dfh', feederJump = false;
+function feederStrokeFor(y) { return ui.mode === 'rally' ? 'dfh' : ui.mode === 'smash' ? 'over' : (y >= 2.2 ? 'over' : (y <= 1.2 ? 'under' : 'dfh')); }
+// 打点(コート座標)と打つ時刻をセットし、打点がストロークの決まった位置に来るよう立ち位置を決める
+function placeFeeder(p, hitT) {
+  feederContact.set(p[0], p[1], p[2]); feederHitT = hitT;
+  feederStroke = feederStrokeFor(p[1]);
+  feederJump = feederStroke === 'over' && (ui.mode === 'smash' || (ui.mode === 'knock' && ui.shot === 'smash'));
+  const off = STROKES[feederStroke].off;   // 相手は +Z 向きなので体の右=−X、前=+Z
+  feederPos.set(clamp(p[0] + off.x, -3.2, 3.2), 0, clamp(p[2] + off.z, -6.6, -0.4));
+}
+function feederPose() {
+  const st = STROKES[feederStroke], tm = st.t, t = sim - feederHitT;
+  const ready = feederStroke === 'over' || feederStroke === 'under' ? READY : READY_D;
+  const prepLen = feederStroke === 'over' ? 0.4 : 0.28, pStart = -tm.lead - prepLen;
+  const prep = clonePose(st.prep);
+  if (st.prep.lhAim) { const s = opp.upper.worldToLocal(world.localToWorld(feederContact.clone())); prep.lh = SL.clone().add(s.sub(SL).normalize().multiplyScalar(0.55)); }
+  const contact = () => {
+    const c = clonePose(st.contact);
+    c.hand = opp.upper.worldToLocal(world.localToWorld(feederContact.clone())).sub(c.dir.clone().multiplyScalar(HEAD));
+    return c;
+  };
+  if (t < pStart || t > tm.follow + tm.recover + 0.2) return clonePose(ready);
+  if (t < -tm.lead) return lerpPose(ready, prep, ease(clamp((t - pStart) / prepLen, 0, 1)));
+  if (t < 0) {
+    const k = (t + tm.lead) / tm.lead, p = lerpPose(prep, contact(), k * k);
+    p.hand.add(st.bulge.clone().multiplyScalar(Math.sin(Math.PI * k))); return p;
+  }
+  if (t < tm.follow) return lerpPose(contact(), st.follow, easeOut(t / tm.follow));
+  return lerpPose(st.follow, ready, ease(clamp((t - tm.follow) / tm.recover, 0, 1)));
+}
+function updateFeeder(dt) {
+  const t = sim - feederHitT;
+  // 打点の約0.1秒前に最高点になる高いジャンプ
+  const jump = feederJump && t > -0.5 && t < 0.3 ? Math.sin((t + 0.5) / 0.8 * Math.PI) * JUMP / 0.924 : 0;
+  const y = opp.root.position.y;
+  opp.root.position.lerp(feederPos, 1 - Math.exp(-dt * (isRally() ? 7 : 4)));
+  opp.root.position.y = jump;
+  opp.root.updateMatrixWorld(true);
+  const p = feederPose(); p.tuck = jump * 0.45;
+  opp.apply(p, shuttle.visible ? shuttle.position : null, dt);
+}
+
+/* ---------- ループ ---------- */
+function resize() {
+  if (renderer.xr.isPresenting) return;
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.fov = w < h ? 74 : 64; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+const clock = new THREE.Clock();
+function frame() {
+  const dtReal = Math.min(clock.getDelta(), 0.05);
+  frameReal = performance.now();
+  let tScale = 1;
+  if (hitStop > 0) { hitStop -= dtReal; tScale = 0; }
+  else if (slowMo > 0) { slowMo -= dtReal; tScale = 0.3 + 0.7 * (1 - slowMo / 0.6); }
+  const dt = dtReal * ui.speed * tScale;
+  lastDt = dt;
+  sim += dt;
+
+  if (state === 'windup' && sim - phaseAt >= WIND) {
+    state = 'flight'; flightStart = phaseAt + WIND;
+    if (ui.mode === 'knock') { stats.feeds++; renderStats(); }
+    setStateText((isRally() ? 'ラリー中 · ' : '飛行中 · ') + cur.name);
+    pang(ui.mode === 'smash' ? 200 : -600, ui.mode === 'smash' ? 0.5 : 0.3);
+  }
+  if (state === 'flight') {
+    const t = sim - flightStart;
+    if (t >= cur.path.landT) {
+      const l = cur.path.land; placeShuttle(l.x, 0.02, l.z);
+      if (isRally()) rallyMiss(swung ? 'ミス' : '見送り', swung ? 'もう一度!' : '打点の少し前に振り出そう');
+      else if (!swung) { stats.errs.push({ err: 0.25, kind: 'miss' }); showJudge('見送り', '打点の少し前に振り出そう', 'var(--miss)'); }
+      renderStats(); state = 'done'; doneReal = performance.now(); setStateText('ミス');
+    } else { const p = posAt(cur.path, t); placeShuttle(...p); pushTrail(p[0], p[1], p[2]); }
+  }
+  if (state === 'return') {
+    const t = sim - retStart;
+    if (isRally() && t >= ret.tOpp) opponentHit();
+    else if (t >= ret.landT) { placeShuttle(ret.land.x, 0.02, ret.land.z); state = 'done'; doneReal = performance.now(); setStateText('返球完了'); }
+    else { const p = posAt(ret, t); placeShuttle(...p); pushTrail(p[0], p[1], p[2]); }
+  }
+  if (state === 'done' && running && performance.now() - doneReal >= ui.interval * 1000) startFeed();
+
+  // スイングの段階を進める
+  const ft = flightT(), tm = T();
+  if (sw.phase === 'ready' && cur && incoming() && !swung && cur.tHit - ft <= STROKES[cur.stroke].t.prepAt) { sw.stroke = cur.stroke; setPhase('prep'); }
+  if (sw.phase === 'prep' && (!incoming() || ft > cur.tHit + 0.3)) setPhase('recover');
+  if (sw.phase === 'fwd' && sim - sw.start >= tm.lead) { pose = evalPose(); applyPose(pose, 0); rig.updateMatrixWorld(true); onContact(); setPhase('follow'); }
+  if (sw.phase === 'follow' && sim - sw.start >= tm.follow) setPhase('recover');
+  if (sw.phase === 'recover' && sim - sw.start >= tm.recover) setPhase('ready');
+
+  // フットワーク:打点に対してストロークごとの立ち位置へ
+  const base = baseOf();
+  let tx = base.x, tz = base.z;
+  if (ui.foot && cur && incoming()) {
+    const o = STROKES[cur.stroke].off;
+    tx = clamp(cur.hitPos[0] - o.x, -3, 3);
+    tz = isRally() ? base.z : clamp(cur.hitPos[2] - o.z, 0.4, 6.6);
+  } else if (isRally()) tx = bodyPos.x + (base.x - bodyPos.x) * 0.3;
+  bodyPos.lerp(V(tx, 0, tz), 1 - Math.exp(-dt * (isRally() ? 9 : 6)));
+  rig.position.copy(bodyPos);
+  pose = evalPose(); applyPose(pose);
+  rig.updateMatrixWorld(true);
+
+  // 残像
+  racket.getWorldPosition(curP); racket.getWorldQuaternion(curQ); curHead.copy(racket.localToWorld(V(0, HEAD, 0)));
+  const fast = ghostInit && curHead.distanceTo(prevHead) > 0.035;
+  ghosts.forEach((g, i) => {
+    g.visible = fast && rig.visible;
+    if (g.visible) {
+      const k = (i + 1) / (GH + 1);
+      g.position.copy(prevP).lerp(curP, k); g.quaternion.copy(prevQ).slerp(curQ, k);
+      g.children.forEach(m => { m.material.opacity = (m.geometry.type === 'CircleGeometry' ? 0.06 : 0.1) + 0.2 * k; });
+    }
+  });
+  prevP.copy(curP); prevQ.copy(curQ); prevHead.copy(curHead); ghostInit = true;
+
+  // ガイド:打点リングは打点時刻に向けて縮み、今振り出せばジャストの瞬間に緑になる
+  const showGuide = ui.guide && cur && state !== 'return';
+  if (guideLine) guideLine.visible = showGuide;
+  hitMarker.visible = !!showGuide;
+  landMarker.visible = !!showGuide && ui.mode === 'knock';
+  if (showGuide) {
+    const active = incoming(), gap = Math.abs(cur.tHit - ft);
+    hitMarker.scale.setScalar(active ? 0.55 + Math.min(gap, 1.2) * 1.1 : 1);
+    const lead = STROKES[cur.stroke].t.lead;
+    hitMarker.material.color.setHex(state === 'flight' && !swung && Math.abs(cur.tHit - lead - ft) <= 0.05 ? 0x7cdca2 : ACC);
+    hitMarker.quaternion.copy(camera.quaternion);
+  }
+  const bt = (sim - burstAt) / (burstBig ? 0.5 : 0.25);
+  burst.visible = bt < 1; if (bt < 1) { burst.scale.setScalar(1 + bt * (burstBig ? 16 : 5)); burst.material.opacity = 0.8 * (1 - bt); burst.material.color.set(burstBig ? '#ffd36b' : '#ffffff'); burst.quaternion.copy(camera.quaternion); } else burstBig = false;
+  updateSparks(dt);
+  trailMat.color.set(isRally() && rally >= 10 ? tierColor(rally) : '#ffffff');
+
+  // 相手
+  updateFeeder(dt);
+
+  if (renderer.xr.isPresenting) checkContact();
+  else if (ui.view === 'fp') {
+    camera.position.copy(upper.localToWorld(V(0, EYE, -0.06)));
+    const ahead = isRally() ? world.localToWorld(opp.root.position.clone().setY(1.4)) : upper.localToWorld(V(0, 1.4, -4));
+    const follow = ui.mode === 'rally' ? 0.5 : (ui.mode === 'smash' ? 0.3 : 0.15);
+    const target = (incoming() || state === 'return') ? shuttle.getWorldPosition(V()).lerp(ahead, follow) : ahead;
+    lookCur.lerp(target, 1 - Math.exp(-dtReal * 9));
+    if (shake > 0) { camera.position.add(V(rnd(), rnd(), rnd()).multiplyScalar(shake)); shake = Math.max(0, shake - dtReal * 0.08); }
+    camera.lookAt(lookCur);
+    camera.rotateZ(-pose.yaw * 0.12);
+  } else {
+    const vf = camera.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+    if (ui.view === 'side') {
+      const d = Math.max(8.4 / Math.tan(hf / 2), 3.2 / Math.tan(vf / 2));
+      camera.position.set(d, 2.4 + d * 0.1, 0.3); camera.lookAt(0, 1.3, 0.3);
+    } else {
+      const d = Math.max(4.6 / Math.tan(hf / 2), 7 / Math.tan(vf / 2));
+      camera.position.set(0, d * 0.75, 6.7 + d * 0.5); camera.lookAt(0, 0.4, -0.5);
+    }
+  }
+  renderer.render(scene, camera);
+}
+resize(); applyView(); setMode('rally');
+renderer.setAnimationLoop(frame);
+};
+</script>
+<script>
+// three.js を複数のCDNから順に読み込む(どれか1つ通れば起動)
+(() => {
+  const urls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+    'https://unpkg.com/three@0.128.0/build/three.min.js'
+  ];
+  const tryLoad = i => {
+    if (window.THREE) return window.__boot();
+    if (i >= urls.length) { document.getElementById('fallback').hidden = false; return; }
+    const sc = document.createElement('script');
+    sc.src = urls[i]; sc.async = true;
+    sc.onload = () => window.THREE ? window.__boot() : tryLoad(i + 1);
+    sc.onerror = () => tryLoad(i + 1);
+    document.head.appendChild(sc);
+  };
+  tryLoad(0);
+})();
+</script>
+
