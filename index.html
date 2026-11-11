@@ -1,4 +1,4 @@
-<title>シャトルノック練習</title>
+<title>シャトルノック練習 VR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
@@ -103,7 +103,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .actions.solo{grid-template-columns:1fr}
 .btn{appearance:none;border:1px solid var(--line);border-radius:10px;padding:11px 10px;font:inherit;font-weight:700;cursor:pointer;background:rgba(255,255,255,.05);color:var(--fg)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.btn.ar{width:100%;border-color:var(--accent);color:var(--accent);background:transparent}
+.btn.ar{border-color:var(--accent);color:var(--accent);background:transparent}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.vr-box{padding:10px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:10px;background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.vr-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .note{font-size:.72rem;color:var(--muted);line-height:1.6;margin:0}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
@@ -225,9 +228,22 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
         <button class="btn primary" id="startBtn" type="button">ラリー開始</button>
         <button class="btn" id="oneBtn" type="button" hidden>1球</button>
       </div>
-      <button class="btn ar" id="arBtn" type="button" hidden>Questで体験(AR)</button>
+      <div class="group vr-box">
+        <div class="label">VRゴーグル</div>
+        <div class="vr-btns">
+          <button class="btn primary" id="vrBtn" type="button" disabled>VRで開始</button>
+          <button class="btn ar" id="arBtn" type="button" disabled>パススルーで開始</button>
+        </div>
+        <p class="note" id="xrStatus">VR対応を確認中…</p>
+        <div class="label" style="margin-top:4px">ラケットを持つ手</div>
+        <div class="seg" id="handSeg">
+          <button type="button" data-v="right" aria-pressed="true">右手</button>
+          <button type="button" data-v="left" aria-pressed="false">左手</button>
+        </div>
+        <div class="range"><div class="range-top"><label for="angle">ラケットの角度</label><output id="oAngle">20°</output></div><input id="angle" type="range" min="-30" max="70" step="5" value="20"></div>
+      </div>
       <p class="note">打つ：Spaceキー、画面タップ、または「打つ」ボタン。押すと振り出し、ドライブは約0.09秒後にインパクトします。打点リングが緑に光った瞬間に振り出すとジャストです。相手は必ず返してくるので、ミスするまで続きます。スマッシュレシーブでは、良い当たりは奥へ高いロブになり、ずれると短く浮いて相手の次のスマッシュが近く・速くなります。</p>
-      <p class="note">Questのブラウザで HTTPS 公開したこのファイルを開くと「Questで体験」が表示され、パススルー越しに相手コートと相手が重なります。</p>
+      <p class="note">VRでは、コントローラーがラケットになります。実際に振って、面の真ん中(スイートスポット)で当てるとJUSTです。A/Xボタンで開始・停止、B/Yボタンで今いる場所を立ち位置にします。ゴーグル内のメニューは、ラケットを持たない手のスティックで操作します。</p>
     </div>
   </aside>
 
@@ -797,7 +813,7 @@ function shoot(from, hx, hz, h, netH) {
 function buildDrive(from) {
   const side = pickSide('dfh', 'dbh');
   const off = STROKES[side].off, tp = tempoNow();
-  const hx = clamp(RB.x + off.x + rnd() * ui.vary * 0.6, -2.7, 2.7), hz = RB.z + off.z;
+  const ctr = aimCenter(RB), hx = clamp(ctr.x + off.x * handSign() + rnd() * ui.vary * 0.6, -2.7, 2.7), hz = ctr.z + off.z;
   // ネットすれすれを通し、速いほど打点を上げて軌道をまっすぐにする(落ちる量を減らす)
   const { h: h0, netH } = driveLine(tp), h = clamp(h0 + rnd() * ui.vary * 0.15, 1.15, 1.55);
   let r, c;
@@ -814,7 +830,7 @@ function buildDrive(from) {
 /* ---------- スマッシュレシーブ:相手が後方からジャンプスマッシュ、腰の高さ(約0.85m)で受ける ---------- */
 function buildSmash(from) {
   const side = pickSide('rfh', 'rbh'), off = STROKES[side].off, tp = tempoNow();
-  const hx = clamp(SB.x + off.x + rnd() * ui.vary * 0.6, -2.6, 2.6), hz = SB.z + off.z, h = 0.85 + rnd() * ui.vary * 0.3;
+  const ctr = aimCenter(SB), hx = clamp(ctr.x + off.x * handSign() + rnd() * ui.vary * 0.6, -2.6, 2.6), hz = ctr.z + off.z, h = 0.85 + rnd() * ui.vary * 0.3;
   const ang = -10 - (tp - 1) * 8, angles = [ang, ang + 2, ang - 2, ang + 4, ang - 4, ang + 7, ang + 10];   // 高い打点から角度をつけて打ち下ろす
   let lo = hz + 0.05, hi = hz + 5, best = null;
   for (let it = 0; it < 12; it++) {   // 打点の高さが h になる落下点を二分法で探す
@@ -852,7 +868,7 @@ function pushTrail(x, y, z) {
   trailArr.push(x, y, z); if (trailArr.length > TRAILN * 3) trailArr.splice(0, 3);
   trailPos.set(trailArr); trailGeo.setDrawRange(0, trailArr.length / 3); trailGeo.attributes.position.needsUpdate = true;
 }
-function setStateText(t) { $('#hudState').textContent = t; }
+function setStateText(t) { $('#hudState').textContent = t; if (typeof hud !== 'undefined') { hud.state = t; hud.dirty = true; } }
 function preview() {
   if (isRally()) {
     const f = serveFrom(); f.x = ui.mode === 'rally' ? OB.x - 0.4 : SO.x - 0.2;
@@ -953,7 +969,7 @@ function onContact() {
   }
   hitShuttle(err, j, tc);
 }
-function hitShuttle(err, j, tc = sim) {
+function hitShuttle(err, j, tc = sim, aim = null) {
   stats.hits++; if (j.kind === 'just') stats.just++;
   stats.errSum += Math.abs(err); stats.errN++; stats.errs.push({ err, kind: j.kind });
   const p = posAt(cur.path, tc - flightStart), from = { x: p[0], y: Math.max(p[1], 0.4), z: p[2] };
@@ -961,7 +977,7 @@ function hitShuttle(err, j, tc = sim) {
     comboHit(j.kind);
     // 良い当たりは奥へ高いロブ、ずれると短く浮いてチャンスボールになる
     const good = j.q >= 0.7;
-    ret = solve(from, { x: clamp(err * 6 + rnd() * 0.5, -2.5, 2.5), z: good ? -5.7 : -4.0 }, good ? [52, 46, 58, 40, 64] : [40, 46, 52, 34]);
+    ret = solve(from, { x: aim !== null ? clamp(aim * 2.4 + rnd() * 0.3, -2.5, 2.5) : clamp(err * 6 + rnd() * 0.5, -2.5, 2.5), z: good ? -5.7 : -4.0 }, good ? [52, 46, 58, 40, 64] : [40, 46, 52, 34]);
     let o = null;
     for (let i = 1; i < ret.pts.length; i++) { const q = ret.pts[i]; if (q[1] < ret.pts[i - 1][1] && q[1] <= SMASH_H && q[2] < -2.2) { o = { t: i * ret.dt, pos: q }; break; } }
     ret.tOpp = o ? o.t : Math.max(0.3, ret.landT - 0.1);
@@ -973,7 +989,7 @@ function hitShuttle(err, j, tc = sim) {
     comboHit(j.kind);
     const tp = tempoNow();
     // 良い当たりはネットすれすれ、ずれると浮いた球になる
-    const ox = clamp(OB.x + err * 8 + rnd() * 0.25, -2.7, 2.7);
+    const ox = aim !== null ? clamp(OB.x + aim * 2.0 + rnd() * 0.15, -2.7, 2.7) : clamp(OB.x + err * 8 + rnd() * 0.25, -2.7, 2.7);
     const line = driveLine(tp);
     const b = shoot(from, ox, OPP_PLANE, line.h, j.q >= 0.7 ? line.netH : 2.05);
     ret = b ? b.r : solve(from, { x: ox, z: -(3.5 + (tp - 1) * 5) }, j.q >= 0.7 ? [6, 9, 12, 15, 18, 22] : [24, 30, 36, 42]);
@@ -983,7 +999,7 @@ function hitShuttle(err, j, tc = sim) {
     placeFeeder(ret.oppPos, tc + ret.tOpp);
     showJudge(j.main, (j.sub ? j.sub + ' ' : '') + (err >= 0 ? '+' : '') + err.toFixed(2) + '秒', j.color);
   } else {
-    const to = { x: clamp(err * 12 + rnd() * 0.3, -3.5, 3.5), z: -5.6 + (1 - j.q) * 2.6 };
+    const to = { x: aim !== null ? clamp(aim * 3 + rnd() * 0.3, -3.2, 3.2) : clamp(err * 12 + rnd() * 0.3, -3.5, 3.5), z: -5.6 + (1 - j.q) * 2.6 };
     ret = solve(from, to, [28, 36, 44, 55, 20, 65]);
     showJudge(j.main, (j.sub ? j.sub + ' ' : '') + (err >= 0 ? '+' : '') + err.toFixed(2) + '秒', j.color);
   }
@@ -1016,6 +1032,7 @@ const tierColor = n => TIERS.find(t => n >= t[0])[1];
 const comboEl = $('#combo'), comboNum = $('#comboNum');
 function restartAnim(el, cls) { el.classList.remove('pop', 'big', 'break'); void el.offsetWidth; if (cls) el.classList.add(cls); }
 function renderCombo(anim) {
+  if (typeof hud !== 'undefined') { hud.dirty = true; if (anim === 'pop' || anim === 'big') { hud.popAt = performance.now(); hud.popBig = anim === 'big'; } }
   const col = tierColor(rally);
   comboNum.textContent = rally;
   comboEl.style.setProperty('--tier', col);
@@ -1026,6 +1043,7 @@ function renderCombo(anim) {
   if (anim) restartAnim(comboEl, anim);
 }
 function banner(text, color) {
+  if (xrOn()) hud.banner = { text, color: cssColor(color), at: performance.now() };
   const b = $('#banner'); b.textContent = text; b.style.setProperty('--bc', color);
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
 }
@@ -1056,6 +1074,11 @@ function comboEnd() {
 /* ---------- UI ---------- */
 const judgeEl = $('#judge'); let judgeTimer = 0;
 function showJudge(main, sub, color) {
+  if (xrOn()) {
+    hud.judge = { main, sub, color: cssColor(color), at: performance.now() }; hud.dirty = true;
+    const near = vr.lastHit && performance.now() - vr.lastHitAt < 250;
+    popupAt(near ? vr.lastHit.clone().add(V(0, 0.32, -0.45)) : headAhead(1.6, 0.05), main, sub, color);
+  }
   $('#jMain').textContent = main; $('#jMain').style.color = color;
   $('#jSub').textContent = sub || ''; $('#jSub').hidden = !sub;
   judgeEl.classList.add('show'); clearTimeout(judgeTimer);
@@ -1145,43 +1168,358 @@ function applyView() {
   me.body.forEach(m => m.visible = !fp);
 }
 
-/* ---------- WebXR(Questのパススルー) ---------- */
-const controllers = [];
-function enterAR() {
-  scene.background = null; scene.fog = null;
-  gym.visible = matOwn.visible = linesOwn.visible = false;
-  world.position.set(0, 0, -baseOf().z); applyView();
-  for (let i = 0; i < 2; i++) {
-    const c = renderer.xr.getController(i);
-    if (!c.userData.racket) { const r = makeRacket(); r.rotation.x = -Math.PI / 2; c.add(r); c.userData.racket = r; c.addEventListener('select', () => xrSwing(false)); }
-    scene.add(c); controllers.push(c);
+/* ---------- VR(WebXR):Quest などのゴーグルで、コントローラーをラケットとして実際に振って打つ ---------- */
+const vr = {
+  kind: null, head: V(0, 1.6, 0), headQ: new THREE.Quaternion(), headCourt: V(0, 1.6, 3),
+  angle: 20, hand: 'right', grips: [], sources: [null, null], racketIdx: 0,
+  face: null, prevFace: null, prevShuttle: null, prevSim: 0, prevFlight: -1,
+  recenterPending: false, btnPrev: {}, stickPrev: {}, lastHit: null
+};
+try {
+  const a = localStorage.getItem('vr-angle'); if (a !== null) vr.angle = +a;
+  vr.hand = localStorage.getItem('vr-hand') || 'right';
+} catch (e) {}
+const xrOn = () => renderer.xr.isPresenting;
+const handSign = () => xrOn() && vr.hand === 'left' ? -1 : 1;
+// 打点の基準:VR中は今立っている位置(頭の真下)、それ以外は決まった立ち位置
+function aimCenter(base) {
+  if (!xrOn()) return { x: base.x, z: base.z };
+  return { x: clamp(vr.headCourt.x, -2.3, 2.3), z: clamp(vr.headCourt.z, base.z - 1, base.z + 1) };
+}
+const cssColor = c => (c && c.startsWith('var(')) ? (getComputedStyle(document.documentElement).getPropertyValue(c.slice(4, -1)).trim() || '#ffffff') : (c || '#ffffff');
+
+/* VR用ラケット(グリップ空間:−Z=握った手の前方、X=手のひらに垂直) */
+const vrRacket = makeRacket(0xe2a23b);
+{ const h = vrRacket.children[0]; if (h) h.scale.set(1.1, 1, 1.1); }
+const offMarker = new THREE.Group();
+{ const m = mat(0xcfd6dc, { roughness: 0.4 });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), m);
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 8), m); stick.rotation.x = Math.PI / 2; stick.position.z = -0.06;
+  offMarker.add(ball, stick); }
+function setRacketAngle() {
+  const a = vr.angle * Math.PI / 180;
+  const y = V(0, Math.sin(a), -Math.cos(a)), z = V(1, 0, 0), x = V().crossVectors(y, z);
+  vrRacket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+  vrRacket.position.copy(y).multiplyScalar(-0.02);
+  $('#oAngle').textContent = vr.angle + '°'; $('#angle').value = vr.angle;
+  try { localStorage.setItem('vr-angle', vr.angle); } catch (e) {}
+}
+for (let i = 0; i < 2; i++) {
+  const g = renderer.xr.getControllerGrip(i);
+  g.addEventListener('connected', e => { vr.sources[i] = e.data; assignHands(); });
+  g.addEventListener('disconnected', () => { vr.sources[i] = null; assignHands(); });
+  scene.add(g); vr.grips.push(g);
+}
+function assignHands() {
+  let idx = vr.sources.findIndex(s => s && s.handedness === vr.hand);
+  if (idx < 0) idx = vr.sources.findIndex(s => s);
+  if (idx < 0) idx = 0;
+  vr.racketIdx = idx;
+  vr.grips[idx].add(vrRacket); vr.grips[1 - idx].add(offMarker);
+  vr.prevFace = null;
+}
+setRacketAngle();
+
+/* ---------- ゴーグル内の表示(DOMは見えないのでキャンバスに描いて貼る) ---------- */
+function canvasPlane(w, h, mw, mh) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const tex = new THREE.CanvasTexture(cv);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  mesh.renderOrder = 10; mesh.visible = false;
+  return { cv, ctx: cv.getContext('2d'), tex, mesh };
+}
+function rrect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+const FD = '"Barlow Condensed","Arial Narrow",sans-serif', FB = '"Zen Kaku Gothic New","Hiragino Sans",sans-serif';
+const MODE_NAME = { rally: 'ドライブ', smash: 'スマッシュレシーブ', knock: 'ノック' };
+const TEMPO_NAME = { '0.88': 'ゆっくり', '1': 'ふつう', '1.12': '速い' };
+
+// 大きなスコアボード(相手コートの奥の上空)
+const hud = canvasPlane(1024, 640, 3.4, 2.125);
+hud.mesh.position.set(0, 3.5, -7.4); world.add(hud.mesh);
+Object.assign(hud, { dirty: true, last: 0, popAt: -9, popBig: false, banner: null, judge: null, state: '' });
+function drawHud() {
+  const c = hud.ctx, W = 1024, H = 640, now = performance.now();
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = 'rgba(10,22,18,0.78)'; rrect(c, 8, 8, W - 16, H - 16, 36); c.fill();
+  c.strokeStyle = 'rgba(226,162,59,0.55)'; c.lineWidth = 4; c.stroke();
+  c.textBaseline = 'alphabetic';
+  c.fillStyle = '#97ac9f'; c.font = `700 44px ${FD}`; c.textAlign = 'left';
+  c.fillText(ui.mode === 'knock' ? 'KNOCK' : (ui.mode === 'smash' ? 'RECEIVE' : 'RALLY'), 48, 78);
+  c.textAlign = 'right'; c.font = `700 36px ${FB}`; c.fillText(MODE_NAME[ui.mode] + ' · ' + (hud.state || ''), W - 48, 78);
+  // 大きな数字
+  const n = ui.mode === 'knock' ? stats.hits : rally, col = ui.mode === 'knock' ? '#e6eee8' : tierColor(rally);
+  c.textAlign = 'center'; c.font = `700 290px ${FD}`;
+  c.shadowColor = col; c.shadowBlur = Math.min(n, 60) * 0.8 + 6; c.fillStyle = col;
+  c.fillText(String(n), W / 2, 365); c.shadowBlur = 0;
+  // ピル
+  const pills = ui.mode === 'knock' ? [`返球 ${stats.hits}/${stats.feeds}`, `JUST ${stats.just}`] : [`BEST ${best}`, `SPEED ×${tempoNow().toFixed(2)}`].concat(justStreak >= 2 ? [`JUST ×${justStreak}`] : []);
+  c.font = `700 40px ${FD}`;
+  const widths = pills.map(p => c.measureText(p).width + 44), total = widths.reduce((a, b) => a + b, 0) + (pills.length - 1) * 16;
+  let x = W / 2 - total / 2;
+  pills.forEach((p, i) => {
+    c.fillStyle = 'rgba(0,0,0,0.45)'; rrect(c, x, 400, widths[i], 58, 29); c.fill();
+    c.strokeStyle = i === 2 ? '#7cdca2' : 'rgba(220,236,226,0.25)'; c.lineWidth = 2; c.stroke();
+    c.fillStyle = i === 2 ? '#7cdca2' : '#e6eee8'; c.fillText(p, x + widths[i] / 2, 442); x += widths[i] + 16;
+  });
+  // 判定
+  if (hud.judge && now - hud.judge.at < 1500) {
+    c.fillStyle = hud.judge.color; c.font = `700 84px ${FD}`; c.fillText(hud.judge.main, W / 2, 560);
+    if (hud.judge.sub) { c.fillStyle = '#e6eee8'; c.font = `700 34px ${FB}`; c.fillText(hud.judge.sub, W / 2, 608); }
+  }
+  // バナー(10 RALLY! など)
+  if (hud.banner) {
+    const k = (now - hud.banner.at) / 1400;
+    if (k < 1) {
+      c.globalAlpha = k < 0.15 ? k / 0.15 : (k > 0.75 ? (1 - k) / 0.25 : 1);
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(0, 120, W, 150);
+      c.fillStyle = hud.banner.color; c.shadowColor = hud.banner.color; c.shadowBlur = 30;
+      c.font = `700 130px ${FD}`; c.fillText(hud.banner.text, W / 2, 240); c.shadowBlur = 0; c.globalAlpha = 1;
+    } else hud.banner = null;
+  }
+  hud.tex.needsUpdate = true; hud.dirty = false; hud.last = now;
+}
+
+// 手前に出る判定(打点の近くに一瞬出る)
+const pop = canvasPlane(512, 256, 0.56, 0.28); world.add(pop.mesh);
+pop.at = -9; pop.from = V();
+function popupAt(pos, main, sub, color) {
+  const c = pop.ctx; c.clearRect(0, 0, 512, 256);
+  c.textAlign = 'center'; c.lineJoin = 'round';
+  c.font = `700 124px ${FD}`; c.lineWidth = 12; c.strokeStyle = 'rgba(0,0,0,0.7)'; c.strokeText(main, 256, 140);
+  c.fillStyle = cssColor(color); c.fillText(main, 256, 140);
+  if (sub) { c.font = `700 40px ${FB}`; c.lineWidth = 8; c.strokeText(sub, 256, 210); c.fillStyle = '#ffffff'; c.fillText(sub, 256, 210); }
+  pop.tex.needsUpdate = true; pop.at = performance.now(); pop.from.copy(pos); pop.mesh.visible = true;
+}
+function headAhead(d, dy = 0) {   // 視線の先 d m(コート座標)
+  const f = V(0, 0, -1).applyQuaternion(vr.headQ); f.y = 0; f.normalize();
+  return world.worldToLocal(vr.head.clone().add(f.multiplyScalar(d)).add(V(0, dy, 0)));
+}
+
+// 操作説明(停止中だけ目の前に出る)
+const help = canvasPlane(1024, 760, 1.25, 0.93); world.add(help.mesh);
+help.dirty = true;
+function drawHelp() {
+  const c = help.ctx, W = 1024, H = 760;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = 'rgba(10,22,18,0.86)'; rrect(c, 6, 6, W - 12, H - 12, 34); c.fill();
+  c.strokeStyle = 'rgba(226,162,59,0.7)'; c.lineWidth = 4; c.stroke();
+  c.textAlign = 'left'; c.fillStyle = '#e2a23b'; c.font = `700 64px ${FB}`;
+  c.fillText(MODE_NAME[ui.mode], 56, 104);
+  c.fillStyle = '#97ac9f'; c.font = `700 38px ${FB}`;
+  c.fillText(ui.mode === 'knock' ? SHOTS[ui.shot].name : 'テンポ:' + (TEMPO_NAME[String(ui.tempo)] || ui.tempo), 56, 160);
+  const off = vr.hand === 'right' ? '左手' : '右手', rk = vr.hand === 'right' ? '右手' : '左手';
+  const pos = { rally: 'ネットから約2.6m', smash: 'ネットから約3.3m', knock: 'ネットから約3.9m' }[ui.mode];
+  const lines = [
+    ['A / X ボタン', '開始・停止'],
+    ['B / Y ボタン', '今いる場所を立ち位置にする'],
+    [off + 'スティック 左右', 'モード切り替え'],
+    [off + 'スティック 上下', ui.mode === 'knock' ? '球種の切り替え' : 'テンポ'],
+    [rk + 'スティック 上下', `ラケットの角度(今 ${vr.angle}°)`],
+    ['振り方', 'コントローラーを実際に振る。面の真ん中でJUST']
+  ];
+  c.font = `700 36px ${FB}`;
+  lines.forEach(([k, v], i) => {
+    const y = 240 + i * 68;
+    c.fillStyle = 'rgba(255,255,255,0.06)'; rrect(c, 48, y - 46, W - 96, 58, 12); c.fill();
+    c.fillStyle = '#e2a23b'; c.fillText(k, 72, y); c.fillStyle = '#e6eee8'; c.fillText(v, 430, y);
+  });
+  c.fillStyle = '#97ac9f'; c.font = `400 32px ${FB}`;
+  c.fillText(vr.kind === 'immersive-ar' ? `本物のコートでは、センターライン上・${pos}に立ってB/Yボタン` : `立ち位置:${pos}(B/Yボタンで今の場所に合わせる)`, 56, H - 52);
+  help.tex.needsUpdate = true; help.dirty = false;
+}
+
+/* ---------- 立ち位置合わせ:今の頭の位置を、モードの立ち位置・ネット方向に合わせる ---------- */
+function recenter(silent) {
+  const b = baseOf(), f = V(0, 0, -1).applyQuaternion(vr.headQ);
+  const yaw = Math.atan2(-f.x, -f.z);
+  world.rotation.set(0, yaw, 0);
+  const rb = V(b.x, 0, b.z).applyAxisAngle(V(0, 1, 0), yaw);
+  world.position.set(vr.head.x - rb.x, 0, vr.head.z - rb.z);
+  world.updateMatrixWorld(true);
+  vr.prevFace = null; vr.prevShuttle = null; help.dirty = true;
+  if (!silent) popupAt(headAhead(1.4, -0.1), '位置OK', 'ここが立ち位置です', '#7cb9f4');
+}
+
+/* ---------- コントローラーのボタンとスティック ---------- */
+const MODES = ['rally', 'smash', 'knock'], TEMPOS = [0.88, 1, 1.12], KNOCKS = Object.keys(SHOTS);
+function pickSeg(id, attr, v) { document.querySelectorAll(`${id} button`).forEach(b => b.setAttribute('aria-pressed', b.dataset[attr] === String(v))); }
+function vrToggleRun() { $('#startBtn').click(); help.dirty = true; }
+function vrSetMode(dir) {
+  const m = MODES[(MODES.indexOf(ui.mode) + dir + MODES.length) % MODES.length];
+  pickSeg('#modeSeg', 'm', m); setMode(m); recenter(true);
+  popupAt(headAhead(1.4, -0.1), MODE_NAME[m], 'B/Yで立ち位置を合わせ直せます', '#e2a23b');
+}
+function vrSetTempo(dir) {
+  if (running) return;
+  if (ui.mode === 'knock') {
+    ui.shot = KNOCKS[(KNOCKS.indexOf(ui.shot) + dir + KNOCKS.length) % KNOCKS.length];
+    document.querySelectorAll('#shotChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.k === ui.shot));
+    preview(); popupAt(headAhead(1.4, -0.1), SHOTS[ui.shot].name, '', '#e2a23b');
+  } else {
+    let i0 = TEMPOS.indexOf(ui.tempo); if (i0 < 0) i0 = 1;
+    ui.tempo = TEMPOS[clamp(i0 + dir, 0, TEMPOS.length - 1)]; pickSeg('#tempoSeg', 'v', ui.tempo); renderCombo();
+    popupAt(headAhead(1.4, -0.1), 'テンポ', TEMPO_NAME[String(ui.tempo)], '#e2a23b');
+  }
+  help.dirty = true;
+}
+function pollButtons() {
+  const s = renderer.xr.getSession(); if (!s) return;
+  for (const src of s.inputSources) {
+    const gp = src.gamepad; if (!gp) continue;
+    const hd = src.handedness, isRacket = hd === vr.hand;
+    const edge = i => { const k = hd + i, p = !!(gp.buttons[i] && gp.buttons[i].pressed), was = vr.btnPrev[k]; vr.btnPrev[k] = p; return p && !was; };
+    if (edge(4)) vrToggleRun();                  // A / X
+    if (edge(5)) recenter(false);                // B / Y
+    if (edge(0) && !isRacket && !running) vrToggleRun();   // ラケットを持たない手のトリガーでも開始
+    const ax = gp.axes.length >= 4 ? gp.axes[2] : (gp.axes[0] || 0), ay = gp.axes.length >= 4 ? gp.axes[3] : (gp.axes[1] || 0);
+    const dirNow = Math.abs(ax) > 0.7 ? (ax > 0 ? 'R' : 'L') : (Math.abs(ay) > 0.7 ? (ay > 0 ? 'D' : 'U') : (Math.hypot(ax, ay) < 0.3 ? '' : null));
+    const prev = vr.stickPrev[hd] || '';
+    if (dirNow === null) continue;
+    if (dirNow && dirNow !== prev) {
+      if (isRacket) {
+        if (dirNow === 'U' || dirNow === 'D') { vr.angle = clamp(vr.angle + (dirNow === 'U' ? 5 : -5), -30, 70); setRacketAngle(); help.dirty = true; popupAt(headAhead(1.4, -0.1), vr.angle + '°', 'ラケットの角度', '#e2a23b'); }
+      } else if (dirNow === 'L' || dirNow === 'R') { if (!running) vrSetMode(dirNow === 'R' ? 1 : -1); }
+      else vrSetTempo(dirNow === 'U' ? 1 : -1);
+    }
+    vr.stickPrev[hd] = dirNow;
   }
 }
-function exitAR() {
+function haptic(strength, ms) {
+  const src = vr.sources[vr.racketIdx], a = src && src.gamepad && src.gamepad.hapticActuators && src.gamepad.hapticActuators[0];
+  if (a && a.pulse) { try { const pr = a.pulse(clamp(strength, 0, 1), ms); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {} }
+}
+
+/* ---------- 当たり判定:ラケット面がシャトルを横切ったかをフレーム間で調べる ---------- */
+const FACE_RX = 0.105, FACE_RY = 0.137;
+function readFace() {
+  vr.grips.forEach(g => g.updateMatrixWorld(true));
+  const toC = (x, y, z) => world.worldToLocal(vrRacket.localToWorld(V(x, y, z)));
+  const c = toC(0, HEAD, 0);
+  return { c, ax: toC(1, HEAD, 0).sub(c), ay: toC(0, HEAD + 1, 0).sub(c), n: toC(0, HEAD, 1).sub(c) };
+}
+function judgeVR(r, speed, err) {
+  const side = err < 0 ? 'early' : 'late', where = Math.abs(err) < 0.05 ? '' : (err < 0 ? '打点が前' : '打点が後ろ');
+  if (speed < 1.2) return { kind: side, q: 0.4, main: 'ブロック', sub: '振りが小さい', color: 'var(--early)' };
+  if (r < 0.45) return { kind: 'just', q: 1, main: 'JUST!', sub: 'スイートスポット', color: 'var(--just)' };
+  if (r < 0.8) return { kind: side, q: 0.7, main: 'GOOD', sub: where || '芯から少しずれ', color: err < 0 ? 'var(--early)' : 'var(--late)' };
+  return { kind: side, q: 0.4, main: 'フレーム', sub: '芯を外した', color: 'var(--late)' };
+}
+function vrCollide(dtReal) {
+  if (!vrRacket.parent) return;
+  const F1 = readFace(), F0 = vr.prevFace;
+  vr.prevFace = F1;
+  const live = state === 'flight' && !swung;
+  if (!live || vr.prevFlight !== flightStart) { vr.prevShuttle = null; vr.prevFlight = flightStart; }
+  const S1 = shuttle.position.clone(), S0 = vr.prevShuttle, sim0 = vr.prevSim;
+  vr.prevShuttle = live ? S1.clone() : null; vr.prevSim = sim;
+  if (!live || !F0 || !S0 || S1.z < -0.3) return;
+  const lerpV = (a, b, s) => a.clone().lerp(b, s);
+  const g0 = F0.n.dot(S0.clone().sub(F0.c)), g1 = F1.n.dot(S1.clone().sub(F1.c));
+  let s = null, r = 9;
+  const radial = s => {
+    const S = lerpV(S0, S1, s), Cc = lerpV(F0.c, F1.c, s), d = S.sub(Cc);
+    const ax = lerpV(F0.ax, F1.ax, s).normalize(), ay = lerpV(F0.ay, F1.ay, s).normalize(), n = lerpV(F0.n, F1.n, s).normalize();
+    return { r: Math.hypot(d.dot(ax) / FACE_RX, d.dot(ay) / FACE_RY), off: Math.abs(d.dot(n)) };
+  };
+  if (Math.sign(g0) !== Math.sign(g1) || Math.abs(g1) < 0.015) {
+    s = Math.abs(g0 - g1) > 1e-6 ? clamp(g0 / (g0 - g1), 0, 1) : 1;
+    r = radial(s).r;
+  }
+  if (r > 1.3) {   // 速いスイングで面を飛び越えた場合の救済:面の中心とシャトルの最接近
+    const d0 = S0.clone().sub(F0.c), d1 = S1.clone().sub(F1.c), dd = d1.clone().sub(d0);
+    const sc = dd.lengthSq() > 1e-9 ? clamp(-d0.dot(dd) / dd.lengthSq(), 0, 1) : 1;
+    const dist = d0.clone().add(dd.multiplyScalar(sc)).length();
+    if (dist < 0.1) { s = sc; r = 0.5 + dist / 0.2; } else return;
+  }
+  const speed = F1.c.distanceTo(F0.c) / Math.max(dtReal, 1e-3);
+  const tc = sim0 + (sim - sim0) * s, err = tc - flightStart - cur.tHit;
+  const j = judgeVR(r, speed, err);
+  // 面の向きで左右の狙いが決まる
+  const n = F1.n.clone(); if (n.z > 0) n.negate();
+  const aim = clamp(-n.x / Math.max(0.35, -n.z), -1, 1);
+  swung = true;
+  const hp = posAt(cur.path, tc - flightStart);
+  vr.lastHit = V(hp[0], hp[1], hp[2]); vr.lastHitAt = performance.now();
+  hitShuttle(err, j, tc, aim);
+  haptic(j.kind === 'just' ? 1 : 0.6, j.kind === 'just' ? 60 : 35);
+}
+
+/* ---------- VRの開始と終了 ---------- */
+async function startXR(kind) {
+  audio();
+  try {
+    const s = await navigator.xr.requestSession(kind, { requiredFeatures: ['local-floor'] });
+    renderer.xr.setReferenceSpaceType('local-floor');
+    await renderer.xr.setSession(s);
+    vr.kind = kind; onXRStart(); s.addEventListener('end', onXREnd);
+  } catch (e) {
+    $('#xrStatus').textContent = 'VRを開始できませんでした。HTTPSのページで開いているか確認してください。(' + (e && e.message || e) + ')';
+  }
+}
+function onXRStart() {
+  const ar = vr.kind === 'immersive-ar';
+  if (ar) { scene.background = null; scene.fog = null; }
+  gym.visible = matOwn.visible = linesOwn.visible = !ar;
+  shuttle.scale.setScalar(1.25);
+  setRunning(false); applyView();
+  hud.mesh.visible = true; hud.dirty = true; help.dirty = true;
+  vr.recenterPending = true; vr.prevFace = null; vr.btnPrev = {}; vr.stickPrev = {};
+}
+function onXREnd() {
   scene.background = BG; scene.fog = FOG;
   gym.visible = matOwn.visible = linesOwn.visible = true;
-  world.position.set(0, 0, 0); controllers.forEach(c => scene.remove(c)); controllers.length = 0; applyView(); resize();
+  shuttle.scale.setScalar(1.6);
+  world.position.set(0, 0, 0); world.rotation.set(0, 0, 0);
+  hud.mesh.visible = help.mesh.visible = pop.mesh.visible = false;
+  vr.kind = null; setRunning(false); applyView(); resize();
 }
-if (navigator.xr && navigator.xr.isSessionSupported) {
-  navigator.xr.isSessionSupported('immersive-ar').then(ok => { $('#arBtn').hidden = !ok; }).catch(() => {});
+// フレームの最初:頭の位置を読む・立ち位置合わせ・ボタン
+function vrBegin(xrFrame) {
+  const pose = xrFrame && xrFrame.getViewerPose(renderer.xr.getReferenceSpace());
+  if (pose) {
+    const p = pose.transform.position, o = pose.transform.orientation;
+    vr.head.set(p.x, p.y, p.z); vr.headQ.set(o.x, o.y, o.z, o.w);
+    if (vr.recenterPending) { vr.recenterPending = false; recenter(true); }
+    vr.headCourt.copy(world.worldToLocal(vr.head.clone()));
+  }
+  pollButtons();
 }
-$('#arBtn').onclick = async () => {
-  try {
-    const s = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local-floor'] });
-    renderer.xr.setReferenceSpaceType('local-floor');
-    await renderer.xr.setSession(s); enterAR(); s.addEventListener('end', exitAR);
-  } catch (e) { showJudge('AR開始失敗', 'HTTPSで開いているか確認してください', 'var(--late)'); }
-};
-function xrSwing(contact) {
-  if (state !== 'flight' || swung) return;
-  const err = sim - flightStart - cur.tHit, j = judgeTiming(err);
-  if (j || contact) { swung = true; hitShuttle(err, j || { kind: err < 0 ? 'early' : 'late', q: 0.4, main: 'HIT', color: 'var(--late)' }); }
+// フレームの最後:表示の更新
+function vrEnd() {
+  const now = performance.now();
+  if (hud.dirty || ((hud.banner || (hud.judge && now - hud.judge.at < 1600)) && now - hud.last > 33)) drawHud();
+  const pk = (now - hud.popAt) / (hud.popBig ? 500 : 300);
+  hud.mesh.scale.setScalar(pk < 1 ? 1 + (hud.popBig ? 0.25 : 0.1) * (1 - pk) : 1);
+  hud.mesh.lookAt(vr.head);
+  // 操作説明は停止中だけ、立ち位置の正面に
+  help.mesh.visible = !running && state !== 'flight' && state !== 'return';
+  if (help.mesh.visible) {
+    if (help.dirty) drawHelp();
+    const b = baseOf();
+    help.mesh.position.set(b.x, 1.45, b.z - 1.5); help.mesh.lookAt(vr.head);
+  }
+  const k = (now - pop.at) / 1000;
+  pop.mesh.visible = k < 1;
+  if (k < 1) { pop.mesh.position.copy(pop.from).add(V(0, 0.15 * k, 0)); pop.mesh.material.opacity = k < 0.75 ? 1 : (1 - k) / 0.25; pop.mesh.lookAt(vr.head); }
 }
-function checkContact() {
-  if (state !== 'flight' || swung) return;
-  const sp = shuttle.getWorldPosition(V());
-  for (const c of controllers) { if (c.localToWorld(V(0, 0, -HEAD)).distanceTo(sp) < 0.3) { xrSwing(true); return; } }
-}
+function faceViewer(o) { if (xrOn()) o.lookAt(vr.head); else o.quaternion.copy(camera.quaternion); }
+
+/* ---------- 画面のボタンと対応確認 ---------- */
+$('#vrBtn').onclick = () => startXR('immersive-vr');
+$('#arBtn').onclick = () => startXR('immersive-ar');
+segGroup('#handSeg', 'v', v => { vr.hand = v; try { localStorage.setItem('vr-hand', v); } catch (e) {} assignHands(); help.dirty = true; });
+pickSeg('#handSeg', 'v', vr.hand);
+$('#angle').oninput = e => { vr.angle = +e.target.value; setRacketAngle(); help.dirty = true; };
+(async () => {
+  const st = $('#xrStatus');
+  if (!window.isSecureContext) { st.textContent = 'VRはHTTPSのページでのみ使えます。GitHub Pages などで公開したURLをゴーグルのブラウザで開いてください。'; return; }
+  if (!navigator.xr) { st.textContent = 'このブラウザはVR(WebXR)に対応していません。Meta Quest のブラウザで開いてください。'; return; }
+  let v = false, a = false;
+  try { v = await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) {}
+  try { a = await navigator.xr.isSessionSupported('immersive-ar'); } catch (e) {}
+  $('#vrBtn').disabled = !v; $('#arBtn').disabled = !a;
+  st.textContent = v || a ? 'ゴーグルを着けて開始できます。' + (a ? 'パススルーでは、本物のコートに相手コートが重なります。' : '') : 'この端末ではVRを開始できません。Meta Quest のブラウザで開いてください。';
+})();
 
 /* ---------- 相手の動き:自分と同じ人体モデルとストロークで、打点にラケットを合わせて振る ---------- */
 const feederContact = V(0, 1.3, -2);
@@ -1236,7 +1574,7 @@ function resize() {
 addEventListener('resize', resize);
 
 const clock = new THREE.Clock();
-function frame() {
+function frame(time, xrFrame) {
   const dtReal = Math.min(clock.getDelta(), 0.05);
   frameReal = performance.now();
   let tScale = 1;
@@ -1245,6 +1583,8 @@ function frame() {
   const dt = dtReal * ui.speed * tScale;
   lastDt = dt;
   sim += dt;
+  const xr = xrOn();
+  if (xr) vrBegin(xrFrame);
 
   if (state === 'windup' && sim - phaseAt >= WIND) {
     state = 'flight'; flightStart = phaseAt + WIND;
@@ -1268,6 +1608,9 @@ function frame() {
     else { const p = posAt(ret, t); placeShuttle(...p); pushTrail(p[0], p[1], p[2]); }
   }
   if (state === 'done' && running && performance.now() - doneReal >= ui.interval * 1000) startFeed();
+
+  // VR:コントローラー(ラケット)とシャトルの当たり判定
+  if (xr) vrCollide(dtReal);
 
   // スイングの段階を進める
   const ft = flightT(), tm = T();
@@ -1313,17 +1656,17 @@ function frame() {
     hitMarker.scale.setScalar(active ? 0.55 + Math.min(gap, 1.2) * 1.1 : 1);
     const lead = STROKES[cur.stroke].t.lead;
     hitMarker.material.color.setHex(state === 'flight' && !swung && Math.abs(cur.tHit - lead - ft) <= 0.05 ? 0x7cdca2 : ACC);
-    hitMarker.quaternion.copy(camera.quaternion);
+    faceViewer(hitMarker);
   }
   const bt = (sim - burstAt) / (burstBig ? 0.5 : 0.25);
-  burst.visible = bt < 1; if (bt < 1) { burst.scale.setScalar(1 + bt * (burstBig ? 16 : 5)); burst.material.opacity = 0.8 * (1 - bt); burst.material.color.set(burstBig ? '#ffd36b' : '#ffffff'); burst.quaternion.copy(camera.quaternion); } else burstBig = false;
+  burst.visible = bt < 1; if (bt < 1) { burst.scale.setScalar(1 + bt * (burstBig ? 16 : 5)); burst.material.opacity = 0.8 * (1 - bt); burst.material.color.set(burstBig ? '#ffd36b' : '#ffffff'); faceViewer(burst); } else burstBig = false;
   updateSparks(dt);
   trailMat.color.set(isRally() && rally >= 10 ? tierColor(rally) : '#ffffff');
 
   // 相手
   updateFeeder(dt);
 
-  if (renderer.xr.isPresenting) checkContact();
+  if (xr) vrEnd();
   else if (ui.view === 'fp') {
     camera.position.copy(upper.localToWorld(V(0, EYE, -0.06)));
     const ahead = isRally() ? world.localToWorld(opp.root.position.clone().setY(1.4)) : upper.localToWorld(V(0, 1.4, -4));
